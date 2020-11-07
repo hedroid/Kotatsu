@@ -9,20 +9,19 @@ class EnumPreferenceDelegate<E : Enum<*>>(
 	private val cls: Class<E>,
 	private val key: String,
 	private val defValue: E
-) :
-	ReadWriteProperty<SharedPreferences, E> {
+) : ReadWriteProperty<SharedPreferences, E> {
 
 	override fun getValue(thisRef: SharedPreferences, property: KProperty<*>): E {
-		val ord = thisRef.getInt(key, -1)
-		if (ord == -1) {
+		val name = thisRef.getString(key, null)
+		if (name === null) {
 			return defValue
 		}
-		return cls.enumConstants?.firstOrNull { it.ordinal == ord } ?: defValue
+		return cls.enumConstants?.find { it.name == name } ?: defValue
 	}
 
 	override fun setValue(thisRef: SharedPreferences, property: KProperty<*>, value: E) {
 		thisRef.edit {
-			putInt(key, value.ordinal)
+			putString(key, value.name)
 		}
 	}
 }
