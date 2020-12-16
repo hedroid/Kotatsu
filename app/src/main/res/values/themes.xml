@@ -6,6 +6,7 @@
 		<item name="actionModeStyle">@style/AppActionMode</item>
 		<item name="preferenceTheme">@style/PreferenceThemeOverlay</item>
 		<item name="badgeStyle">@style/Widget.MaterialComponents.Badge</item>
+		<item name="android:statusBarColor">@color/status_bar</item>
 	</style>
 
 	<style name="AppTheme" parent="BaseAppTheme">
