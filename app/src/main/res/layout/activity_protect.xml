@@ -1,47 +1,80 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout
+<androidx.constraintlayout.widget.ConstraintLayout
 	xmlns:android="http://schemas.android.com/apk/res/android"
 	xmlns:app="http://schemas.android.com/apk/res-auto"
+	xmlns:tools="http://schemas.android.com/tools"
 	android:layout_width="match_parent"
 	android:layout_height="match_parent"
-	android:orientation="vertical">
+	android:padding="@dimen/screen_padding">
 
-	<com.google.android.material.appbar.AppBarLayout
-		android:id="@+id/appbar"
-		android:layout_width="match_parent"
+	<TextView
+		android:id="@+id/textView_title"
+		android:layout_width="0dp"
 		android:layout_height="wrap_content"
-		android:background="?colorPrimary"
-		android:theme="@style/AppToolbarTheme">
+		android:layout_marginTop="8dp"
+		android:drawablePadding="16dp"
+		android:gravity="center_horizontal"
+		android:text="@string/app_name"
+		android:textAppearance="?textAppearanceHeadline5"
+		app:drawableTint="?colorPrimary"
+		app:drawableTopCompat="@drawable/ic_lock"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toTopOf="parent" />
 
-		<com.google.android.material.appbar.MaterialToolbar
-			android:id="@id/toolbar"
-			android:layout_width="match_parent"
-			android:layout_height="wrap_content"
-			app:layout_scrollFlags="scroll|enterAlways"
-			app:popupTheme="@style/AppPopupTheme" />
-
-	</com.google.android.material.appbar.AppBarLayout>
+	<TextView
+		android:id="@+id/textView_subtitle"
+		android:layout_width="0dp"
+		android:layout_height="wrap_content"
+		android:layout_marginTop="12dp"
+		android:gravity="center_horizontal"
+		android:text="@string/enter_password"
+		android:textAppearance="?textAppearanceSubtitle1"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toBottomOf="@id/textView_title" />
 
 	<com.google.android.material.textfield.TextInputLayout
 		android:id="@+id/layout_password"
-		android:layout_width="match_parent"
+		android:layout_width="0dp"
 		android:layout_height="wrap_content"
-		android:layout_gravity="center"
-		android:layout_margin="20dp"
-		app:boxBackgroundColor="@android:color/transparent"
-		app:boxBackgroundMode="filled"
-		app:endIconMode="password_toggle"
-		app:errorEnabled="true"
-		app:errorTextColor="@color/error">
+		android:layout_marginTop="30dp"
+		app:errorIconDrawable="@null"
+		app:layout_constraintEnd_toEndOf="parent"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintTop_toBottomOf="@id/textView_subtitle">
 
 		<com.google.android.material.textfield.TextInputEditText
 			android:id="@+id/edit_password"
 			android:layout_width="match_parent"
 			android:layout_height="wrap_content"
-			android:hint="@string/enter_password"
+			android:gravity="center_horizontal"
 			android:imeOptions="actionDone"
-			android:inputType="textPassword" />
+			android:inputType="textPassword"
+			android:maxLength="24"
+			android:singleLine="true"
+			android:textAlignment="center"
+			android:textSize="16sp"
+			tools:text="1234" />
 
 	</com.google.android.material.textfield.TextInputLayout>
 
-</LinearLayout>
+	<Button
+		android:id="@+id/button_cancel"
+		style="?borderlessButtonStyle"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:text="@android:string/cancel"
+		app:layout_constraintBottom_toBottomOf="parent"
+		app:layout_constraintStart_toStartOf="parent" />
+
+	<Button
+		android:id="@+id/button_next"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:enabled="false"
+		android:text="@string/next"
+		app:layout_constraintBottom_toBottomOf="parent"
+		app:layout_constraintEnd_toEndOf="parent" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>
