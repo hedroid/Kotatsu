@@ -27,10 +27,13 @@ class ListSelectionController(
 ) : ActionMode.Callback, SavedStateRegistry.SavedStateProvider {
 
 	private var actionMode: ActionMode? = null
-	private val stateEventObserver = StateEventObserver()
 
 	val count: Int
 		get() = decoration.checkedItemsCount
+
+	init {
+		registryOwner.lifecycle.addObserver(StateEventObserver())
+	}
 
 	fun snapshot(): Set<Long> {
 		return peekCheckedIds().toSet()
@@ -55,7 +58,6 @@ class ListSelectionController(
 
 	fun attachToRecyclerView(recyclerView: RecyclerView) {
 		recyclerView.addItemDecoration(decoration)
-		registryOwner.lifecycle.addObserver(stateEventObserver)
 	}
 
 	override fun saveState(): Bundle {
