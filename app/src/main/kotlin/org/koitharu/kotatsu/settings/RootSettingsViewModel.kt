@@ -4,7 +4,6 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.plus
 import org.koitharu.kotatsu.core.ui.BaseViewModel
@@ -18,7 +17,6 @@ class RootSettingsViewModel @Inject constructor(
 
 	val totalSourcesCount = sourcesRepository.allMangaSources.size
 
-	val enabledSourcesCount = sourcesRepository.observeEnabledSources()
-		.map { it.size }
+	val enabledSourcesCount = sourcesRepository.observeEnabledSourcesCount()
 		.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, -1)
 }
