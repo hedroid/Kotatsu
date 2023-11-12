@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+	xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	xmlns:tools="http://schemas.android.com/tools"
+	android:layout_width="match_parent"
+	android:layout_height="wrap_content"
+	android:background="?android:windowBackground"
+	android:gravity="center_vertical"
+	android:minHeight="?listPreferredItemHeightSmall"
+	android:orientation="horizontal"
+	android:paddingVertical="@dimen/margin_small"
+	android:paddingStart="?listPreferredItemPaddingStart"
+	android:paddingEnd="?listPreferredItemPaddingEnd">
+
+	<com.google.android.material.imageview.ShapeableImageView
+		android:id="@+id/imageView_icon"
+		android:layout_width="32dp"
+		android:layout_height="32dp"
+		android:background="?colorControlHighlight"
+		android:labelFor="@id/textView_title"
+		android:scaleType="fitCenter"
+		app:shapeAppearance="?shapeAppearanceCornerSmall"
+		tools:src="@tools:sample/avatars" />
+
+	<TextView
+		android:id="@+id/textView_title"
+		android:layout_width="0dp"
+		android:layout_height="wrap_content"
+		android:layout_marginStart="?android:listPreferredItemPaddingStart"
+		android:layout_marginEnd="?android:listPreferredItemPaddingEnd"
+		android:layout_weight="1"
+		android:ellipsize="end"
+		android:singleLine="true"
+		android:textAppearance="?attr/textAppearanceTitleSmall"
+		tools:text="@tools:sample/lorem[15]" />
+
+	<ImageView
+		android:id="@+id/imageView_add"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:background="?selectableItemBackgroundBorderless"
+		android:contentDescription="@string/add"
+		android:padding="@dimen/margin_small"
+		android:scaleType="center"
+		android:src="@drawable/ic_add"
+		android:tooltipText="@string/add" />
+
+</LinearLayout>

@@ -7,6 +7,7 @@
 	android:layout_height="wrap_content"
 	android:background="?android:windowBackground"
 	android:gravity="center_vertical"
+	android:minHeight="?listPreferredItemHeightSmall"
 	android:orientation="horizontal"
 	android:paddingVertical="@dimen/margin_small"
 	android:paddingStart="?listPreferredItemPaddingStart"
@@ -36,7 +37,7 @@
 			android:layout_height="wrap_content"
 			android:ellipsize="end"
 			android:singleLine="true"
-			android:textAppearance="?attr/textAppearanceBodyLarge"
+			android:textAppearance="?attr/textAppearanceTitleSmall"
 			tools:text="@tools:sample/lorem[15]" />
 
 		<TextView
