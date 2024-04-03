@@ -37,6 +37,7 @@ import org.koitharu.kotatsu.reader.ui.thumbnails.PageThumbnail
 import javax.inject.Inject
 import kotlin.math.roundToInt
 
+@Deprecated("")
 @AndroidEntryPoint
 class BookmarksSheet :
 	BaseAdaptiveSheet<SheetPagesBinding>(),
