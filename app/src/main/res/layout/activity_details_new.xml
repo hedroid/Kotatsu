@@ -1,12 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.coordinatorlayout.widget.CoordinatorLayout
+<LinearLayout
 	xmlns:android="http://schemas.android.com/apk/res/android"
 	xmlns:app="http://schemas.android.com/apk/res-auto"
 	xmlns:tools="http://schemas.android.com/tools"
-	android:id="@+id/coordinator"
+	android:id="@+id/layout_root"
 	android:layout_width="match_parent"
 	android:layout_height="match_parent"
-	android:clipToPadding="false">
+	android:clipToPadding="false"
+	android:orientation="vertical"
+	tools:viewBindingType="android.view.ViewGroup">
 
 	<com.google.android.material.appbar.AppBarLayout
 		android:id="@+id/appbar"
@@ -27,8 +29,7 @@
 		android:layout_height="match_parent"
 		android:clipToPadding="false"
 		android:scrollIndicators="top"
-		android:scrollbars="vertical"
-		app:layout_behavior="@string/appbar_scrolling_view_behavior">
+		android:scrollbars="vertical">
 
 		<androidx.constraintlayout.widget.ConstraintLayout
 			android:layout_width="match_parent"
@@ -235,6 +236,24 @@
 				app:layout_constraintBaseline_toBaselineOf="@id/textView_description_title"
 				app:layout_constraintEnd_toEndOf="parent" />
 
+			<org.koitharu.kotatsu.core.ui.widgets.SelectableTextView
+				android:id="@+id/textView_description"
+				android:layout_width="0dp"
+				android:layout_height="wrap_content"
+				android:layout_marginStart="@dimen/margin_normal"
+				android:layout_marginTop="@dimen/margin_small"
+				android:layout_marginEnd="@dimen/margin_normal"
+				android:ellipsize="end"
+				android:lineSpacingMultiplier="1.2"
+				android:maxLines="@integer/details_description_lines"
+				android:textAppearance="?attr/textAppearanceBodyMedium"
+				android:textIsSelectable="true"
+				app:layout_constraintEnd_toEndOf="parent"
+				app:layout_constraintStart_toStartOf="parent"
+				app:layout_constraintTop_toBottomOf="@id/textView_description_title"
+				tools:ignore="UnusedAttribute"
+				tools:text="@tools:sample/lorem/random" />
+
 			<org.koitharu.kotatsu.core.ui.widgets.ChipsView
 				android:id="@+id/chips_tags"
 				android:layout_width="0dp"
@@ -246,33 +265,14 @@
 				app:chipSpacingVertical="6dp"
 				app:layout_constraintEnd_toEndOf="parent"
 				app:layout_constraintStart_toStartOf="parent"
-				app:layout_constraintTop_toBottomOf="@+id/textView_description_title" />
-
-			<org.koitharu.kotatsu.core.ui.widgets.SelectableTextView
-				android:id="@+id/textView_description"
-				android:layout_width="0dp"
-				android:layout_height="wrap_content"
-				android:layout_marginStart="@dimen/margin_normal"
-				android:layout_marginTop="@dimen/margin_small"
-				android:layout_marginEnd="@dimen/margin_normal"
-				android:ellipsize="end"
-				android:lineSpacingMultiplier="1.2"
-				android:maxLines="@integer/details_description_lines"
-				android:paddingBottom="@dimen/margin_normal"
-				android:textAppearance="?attr/textAppearanceBodyMedium"
-				android:textIsSelectable="true"
-				app:layout_constraintEnd_toEndOf="parent"
-				app:layout_constraintStart_toStartOf="parent"
-				app:layout_constraintTop_toBottomOf="@id/chips_tags"
-				tools:ignore="UnusedAttribute"
-				tools:text="@tools:sample/lorem/random" />
+				app:layout_constraintTop_toBottomOf="@+id/textView_description" />
 
 			<TextView
 				android:id="@+id/textView_scrobbling_title"
 				android:layout_width="0dp"
 				android:layout_height="wrap_content"
 				android:layout_marginStart="@dimen/margin_small"
-				android:layout_marginTop="@dimen/margin_small"
+				android:layout_marginTop="@dimen/margin_normal"
 				android:layout_weight="1"
 				android:gravity="center_vertical|start"
 				android:padding="@dimen/grid_spacing"
@@ -281,7 +281,7 @@
 				android:textAppearance="@style/TextAppearance.Kotatsu.SectionHeader"
 				app:layout_constraintEnd_toStartOf="@id/button_scrobbling_more"
 				app:layout_constraintStart_toStartOf="parent"
-				app:layout_constraintTop_toBottomOf="@id/textView_description" />
+				app:layout_constraintTop_toBottomOf="@id/chips_tags" />
 
 			<Button
 				android:id="@+id/button_scrobbling_more"
@@ -326,14 +326,6 @@
 				app:layout_constraintTop_toTopOf="parent"
 				app:showAnimationBehavior="inward"
 				app:trackCornerRadius="0dp"
-				tools:visibility="visible" />
-
-			<androidx.constraintlayout.widget.Group
-				android:id="@+id/group_bookmarks"
-				android:layout_width="wrap_content"
-				android:layout_height="wrap_content"
-				android:visibility="gone"
-				app:constraint_referenced_ids="recyclerView_bookmarks,textView_bookmarks_title,button_bookmarks_more"
 				tools:visibility="visible" />
 
 			<androidx.constraintlayout.widget.Group
@@ -398,4 +390,4 @@
 		</androidx.constraintlayout.widget.ConstraintLayout>
 
 	</androidx.core.widget.NestedScrollView>
-</androidx.coordinatorlayout.widget.CoordinatorLayout>
+</LinearLayout>
