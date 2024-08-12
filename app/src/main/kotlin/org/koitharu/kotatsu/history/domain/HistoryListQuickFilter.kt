@@ -1,5 +1,6 @@
 package org.koitharu.kotatsu.history.domain
 
+import org.koitharu.kotatsu.core.os.NetworkState
 import org.koitharu.kotatsu.core.prefs.AppSettings
 import org.koitharu.kotatsu.history.data.HistoryRepository
 import org.koitharu.kotatsu.list.domain.ListFilterOption
@@ -9,7 +10,12 @@ import javax.inject.Inject
 class HistoryListQuickFilter @Inject constructor(
 	private val settings: AppSettings,
 	private val repository: HistoryRepository,
+	networkState: NetworkState,
 ) : MangaListQuickFilter() {
+
+	init {
+		setFilterOption(ListFilterOption.Downloaded, !networkState.value)
+	}
 
 	override suspend fun getAvailableFilterOptions(): List<ListFilterOption> = buildList {
 		add(ListFilterOption.Downloaded)
