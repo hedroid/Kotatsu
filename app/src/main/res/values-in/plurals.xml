@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <plurals name="items">
-        <item quantity="other">%1$d butir</item>
+        <item quantity="other">”%1$d butir</item>
     </plurals>
     <plurals name="new_chapters">
-        <item quantity="other">%1$d bab baru</item>
+        <item quantity="other">%1$d Jilid Baru</item>
     </plurals>
     <plurals name="chapters">
-        <item quantity="other">%1$d bab</item>
+        <item quantity="other">%1$d Jilid</item>
     </plurals>
     <plurals name="minutes_ago">
         <item quantity="other">%1$d menit yang lalu</item>
