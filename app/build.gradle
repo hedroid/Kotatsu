@@ -12,10 +12,23 @@ plugins {
 	// id 'dev.reformator.stacktracedecoroutinator'
 }
 
+def releaseKeystorePath = System.getenv('KOTATSU_KEYSTORE_PATH')
+
 android {
 	compileSdk = 36
 	buildToolsVersion = '35.0.0'
 	namespace = 'org.koitharu.kotatsu'
+
+	signingConfigs {
+		release {
+			if (releaseKeystorePath) {
+				storeFile file(releaseKeystorePath)
+				storePassword System.getenv('KOTATSU_KEYSTORE_PASSWORD')
+				keyAlias System.getenv('KOTATSU_KEY_ALIAS')
+				keyPassword System.getenv('KOTATSU_KEY_PASSWORD')
+			}
+		}
+	}
 
     dependenciesInfo {
         // Disables dependency metadata when building APKs.
@@ -25,7 +38,7 @@ android {
     }
 
     defaultConfig {
-		applicationId 'io.github.kotatsuredo.kotatsu'
+		applicationId 'com.github.kotatsu'
 		minSdk = 23
 		targetSdk = 36
 		versionCode = 2037
@@ -51,6 +64,9 @@ android {
 			applicationIdSuffix = '.debug'
 		}
 		release {
+			if (releaseKeystorePath) {
+				signingConfig signingConfigs.release
+			}
 			minifyEnabled true
 			shrinkResources true
 			proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
