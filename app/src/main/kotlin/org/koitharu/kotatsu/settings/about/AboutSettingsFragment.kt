@@ -44,8 +44,11 @@ class AboutSettingsFragment : BasePreferenceFragment(R.string.about) {
 				findPreference<Preference>(AppSettings.KEY_UPDATES_UNSTABLE)?.isVisible = isUpdateSupported
 				findPreference<Preference>(AppSettings.KEY_APP_VERSION)?.isEnabled = isUpdateSupported && !isLoading
 
-			}
+		}
 		viewModel.onUpdateAvailable.observeEvent(viewLifecycleOwner, ::onUpdateAvailable)
+		viewModel.onError.observeEvent(viewLifecycleOwner) {
+			Snackbar.make(listView, R.string.update_check_failed, Snackbar.LENGTH_SHORT).show()
+		}
 	}
 
 	override fun onPreferenceTreeClick(preference: Preference): Boolean {

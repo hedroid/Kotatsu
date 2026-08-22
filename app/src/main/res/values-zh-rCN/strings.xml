@@ -155,6 +155,7 @@
     <string name="app_version">版本 %s</string>
     <string name="check_for_updates">检查更新</string>
     <string name="no_update_available">已是最新版本</string>
+    <string name="update_check_failed">检查更新失败</string>
     <string name="right_to_left">从右到左</string>
     <string name="create_category">添加分类</string>
     <string name="scale_mode">缩放模式</string>

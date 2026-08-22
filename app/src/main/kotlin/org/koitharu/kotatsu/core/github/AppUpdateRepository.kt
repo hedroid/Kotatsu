@@ -37,11 +37,13 @@ class AppUpdateRepository @Inject constructor(
 ) {
 
 	private val availableUpdate = MutableStateFlow<AppVersion?>(null)
+	private val updatesRepo = context.getString(R.string.github_updates_repo)
 	private val releasesUrl = buildString {
 		append("https://api.github.com/repos/")
-		append(context.getString(R.string.github_updates_repo))
+		append(updatesRepo)
 		append("/releases?page=1&per_page=10")
 	}
+	private val latestReleaseUrl = "https://github.com/$updatesRepo/releases/latest"
 
 	val isUpdateAvailable: Boolean
 		get() = availableUpdate.value != null
@@ -99,52 +101,63 @@ class AppUpdateRepository @Inject constructor(
 		}
 	}
 
-	suspend fun fetchUpdate(): AppVersion? = withContext(Dispatchers.Default) {
-		android.util.Log.d("UPDATE_DEBUG", "=== Starting fetchUpdate ===")
+	private suspend fun getLatestVersion(): AppVersion {
+		val releaseResponse = okHttp.newCall(
+			Request.Builder()
+				.head()
+				.url(latestReleaseUrl)
+				.build(),
+		).await()
+		val releaseUrl = releaseResponse.use { response ->
+			check(response.isSuccessful) { "GitHub latest release request failed: ${response.code}" }
+			response.request.url
+		}
+		val tagPrefix = "/releases/tag/"
+		val tag = releaseUrl.encodedPath.substringAfter(tagPrefix, "")
+		check(tag.isNotEmpty()) { "Invalid GitHub latest release URL: $releaseUrl" }
+		val versionName = tag.removePrefix("v")
+		val apkUrl = "https://github.com/$updatesRepo/releases/download/$tag/Kotatsu-$versionName.apk"
+		val apkSize = okHttp.newCall(
+			Request.Builder()
+				.head()
+				.url(apkUrl)
+				.build(),
+		).await().use { response ->
+			check(response.isSuccessful) { "GitHub release APK request failed: ${response.code}" }
+			response.body.contentLength().coerceAtLeast(0L)
+		}
+		return AppVersion(
+			id = versionName.hashCode().toLong(),
+			url = releaseUrl.toString(),
+			name = versionName,
+			apkSize = apkSize,
+			apkUrl = apkUrl,
+			description = "",
+		)
+	}
 
+	suspend fun checkForUpdate(): AppVersion? = withContext(Dispatchers.Default) {
 		if (!isUpdateSupported()) {
-			android.util.Log.d("UPDATE_DEBUG", "Update not supported, returning null")
 			return@withContext null
 		}
-		android.util.Log.d("UPDATE_DEBUG", "Update is supported, proceeding...")
+		val currentVersion = VersionId(BuildConfig.VERSION_NAME)
+		val available = if (currentVersion.isStable && !settings.isUnstableUpdatesAllowed) {
+			arrayListOf(getLatestVersion())
+		} else {
+			getAvailableVersions().asArrayList()
+		}
+		val result = available.maxByOrNull { it.versionId }
+			?.takeIf { it.versionId > currentVersion }
+		availableUpdate.value = result
+		result
+	}
 
-		runCatchingCancellable {
-			val currentVersion = VersionId(BuildConfig.VERSION_NAME)
-			android.util.Log.d("UPDATE_DEBUG", "Current version: ${BuildConfig.VERSION_NAME} -> $currentVersion")
-
-			val available = getAvailableVersions().asArrayList()
-			android.util.Log.d("UPDATE_DEBUG", "Found ${available.size} available versions:")
-			available.forEach { version ->
-				android.util.Log.d("UPDATE_DEBUG", "  - ${version.name} -> ${version.versionId} (stable: ${version.versionId.isStable})")
-			}
-
-			available.sortBy { it.versionId }
-			android.util.Log.d("UPDATE_DEBUG", "After sorting by version:")
-			available.forEach { version ->
-				android.util.Log.d("UPDATE_DEBUG", "  - ${version.name} -> ${version.versionId}")
-			}
-
-			if (currentVersion.isStable && !settings.isUnstableUpdatesAllowed) {
-				val beforeFiltering = available.size
-				available.retainAll { it.versionId.isStable }
-				android.util.Log.d("UPDATE_DEBUG", "Filtered unstable versions: $beforeFiltering -> ${available.size}")
-			}
-
-			val maxVersion = available.maxByOrNull { it.versionId }
-			android.util.Log.d("UPDATE_DEBUG", "Max available version: ${maxVersion?.name} -> ${maxVersion?.versionId}")
-
-			val result = maxVersion?.takeIf { it.versionId > currentVersion }
-			android.util.Log.d("UPDATE_DEBUG", "Update result: ${result?.name} (${result?.versionId} > $currentVersion = ${result?.versionId?.let { it > currentVersion }})")
-
-			result
-		}.onFailure {
+	suspend fun fetchUpdate(): AppVersion? = runCatchingCancellable {
+		checkForUpdate()
+	}.onFailure {
 			android.util.Log.e("UPDATE_DEBUG", "Error during update check", it)
 			it.printStackTraceDebug()
-		}.onSuccess {
-			android.util.Log.d("UPDATE_DEBUG", "Setting availableUpdate to: ${it?.name}")
-			availableUpdate.value = it
-		}.getOrNull()
-	}
+	}.getOrNull()
 
 	@Suppress("KotlinConstantConditions")
     fun isUpdateSupported(): Boolean {
