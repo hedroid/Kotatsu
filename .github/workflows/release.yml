@@ -55,7 +55,7 @@ jobs:
           KOTATSU_KEYSTORE_PASSWORD: ${{ secrets.KOTATSU_KEYSTORE_PASSWORD }}
           KOTATSU_KEY_ALIAS: ${{ secrets.KOTATSU_KEY_ALIAS }}
           KOTATSU_KEY_PASSWORD: ${{ secrets.KOTATSU_KEY_PASSWORD }}
-        run: ./gradlew :app:assembleRelease
+        run: ./gradlew -Dorg.gradle.jvmargs="-Xmx4g -Dfile.encoding=UTF-8" :app:assembleRelease
 
       - name: Prepare APK
         env:
