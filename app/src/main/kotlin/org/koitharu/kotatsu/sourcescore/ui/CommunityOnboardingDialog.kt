@@ -520,7 +520,7 @@ class CommunityOnboardingDialog : DialogFragment() {
 
 		private const val NICKNAME_MIN = 2
 
-		const val SPONSOR_URL = "https://github.com/sponsors/Kotatsu-Redo"
+		const val SPONSOR_URL = "https://github.com/hedroid/Kotatsu"
 
 		/** Server first, then an even split of what is left - which is what the wording promises. */
 		private const val SHARE_SERVER = 0.20f
