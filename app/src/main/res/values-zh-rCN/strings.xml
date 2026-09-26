@@ -898,4 +898,165 @@
     <string name="source_replacement_summary_sources">使用的图源</string>
     <string name="source_replacement_summary_mix">替换图源分布</string>
     <string name="source_replacement_summary_source_item">%1$s · %2$d</string>
+
+    <!-- Settings: misc -->
+    <string name="available_pattern">%1$s 可用</string>
+    <string name="create_or_restore_backup">创建或恢复备份</string>
+    <string name="data_removal">数据清除</string>
+    <string name="disable_captcha_auto_solve">关闭验证码自动识别</string>
+    <string name="disable_captcha_auto_solve_summary">不在后台静默识别验证码，而是提示你手动完成。</string>
+    <string name="download_default_directory">下载漫画的默认目录</string>
+    <string name="e_ink">墨水屏</string>
+    <string name="exclude_nsfw_from_shortcuts">在快捷方式中隐藏成人内容</string>
+    <string name="exclude_nsfw_from_shortcuts_summary">成人漫画不会出现在长按应用图标时显示的快捷方式菜单中</string>
+    <string name="flash_duration">闪烁时长</string>
+    <string name="flash_every">闪烁间隔</string>
+    <string name="flash_on_page_change">翻页时闪烁刷新</string>
+    <string name="flash_on_page_change_summary">翻页时以短暂的全屏闪烁刷新屏幕，减轻墨水屏残影</string>
+    <string name="flash_with">闪烁颜色</string>
+    <string name="floating_nav_bar">悬浮导航栏</string>
+    <string name="floating_nav_bar_summary">使用圆角悬浮样式的导航栏</string>
+    <string name="frequency_every_6_hours">每 6 小时</string>
+    <string name="milliseconds_pattern">%1$d 毫秒</string>
+    <string name="private_app_directory_warning">卸载应用时，此目录及其中所有数据都会被删除</string>
+    <string name="reader_chapter_toast">显示章节切换提示</string>
+    <string name="reader_chapter_toast_summary">章节切换时弹出提示并显示章节标题</string>
+    <string name="storage_and_network">存储与网络</string>
+    <string name="sync_login">登录以同步数据</string>
+    <string name="forgot_password">忘记密码</string>
+    <string name="password_reset">密码重置成功</string>
+    <string name="reset_password">重置密码</string>
+    <string name="confirm_password">确认密码</string>
+    <string name="reset_email_sent">如果该账号存在，重置密码的邮件已发送到你的邮箱</string>
+    <string name="no_reset_token">未提供重置令牌</string>
+    <string name="sync_auth_reset_hint">请为你的账号设置新密码</string>
+    <string name="sync_auth_reset_title">重置密码</string>
+    <string name="privacy">隐私</string>
+
+    <!-- Community: settings -->
+    <string name="community">社区</string>
+    <string name="community_rating">读者评分</string>
+    <string name="community_rating_summary">%1$s · %2$s</string>
+    <string name="community_rating_dash">–</string>
+    <string name="community_rating_none">暂无评分</string>
+    <string name="community_rating_failed">评分保存失败</string>
+    <string name="community_summary">评论、评分与图源可靠性</string>
+    <string name="community_enabled">社区功能</string>
+    <string name="community_enabled_summary">评论与评分</string>
+    <string name="community_telemetry">分享图源可靠性</string>
+    <string name="community_telemetry_summary">匿名，仅按图源统计，绝不涉及你读了什么。</string>
+    <string name="community_server">服务器</string>
+    <string name="community_server_checking">正在检查…</string>
+    <string name="community_server_ok">连接正常</string>
+    <string name="community_server_unreachable">无法访问——评论和评分将不会显示</string>
+    <string name="community_nickname">昵称</string>
+    <string name="community_nickname_summary">你在评论中显示的名字</string>
+    <string name="community_recovery">备份我的身份</string>
+    <string name="community_recovery_summary">保存你的密钥，或从其他手机恢复</string>
+    <string name="community_recovery_none">首次使用社区功能时才会创建你的身份。</string>
+    <string name="community_recovery_explain">请把密钥抄写保存。这是把你的评论和评分迁移到其他手机的唯一方式，任何人都无法替你找回。</string>
+    <string name="community_recovery_hint">恢复密钥</string>
+    <string name="community_recovery_restore">恢复</string>
+    <string name="community_recovery_restored">身份已恢复</string>
+    <string name="community_recovery_invalid">这看起来不是恢复密钥</string>
+    <string name="community_delete">删除我的全部数据</string>
+    <string name="community_delete_summary">永久删除服务器上你的评分和评论</string>
+    <string name="community_delete_confirm">这将清除你的评分、删除你的评论并注销你的身份，操作无法撤销。</string>
+    <string name="community_sponsor">支持 Kotatsu-Redo</string>
+    <string name="community_intro_replay">显示功能介绍</string>
+    <string name="community_intro_replay_summary">重新走一遍社区功能介绍</string>
+
+    <!-- Community: onboarding -->
+    <string name="community_intro_title">评论与评分</string>
+    <string name="community_intro_body">Kotatsu-Redo 现在可以显示其他读者的评论和评分，并利用大家汇总的信息，把真正可用的图源排到搜索结果前列。\n\n无需注册账号，没有邮箱和密码。你的设备会生成一个随机密钥，那就是你的全部身份——可以备份并迁移到新手机。</string>
+    <string name="community_recover">恢复</string>
+    <string name="community_recover_title">恢复你的账号</string>
+    <string name="community_recover_body">粘贴你另一台设备上的恢复密钥，它就在那台设备的 设置 → 服务 → 社区 中。
+
+恢复后，你的评论、评分和昵称都会一并回来。</string>
+    <string name="community_recover_hint">恢复密钥</string>
+    <string name="community_recover_action">恢复</string>
+    <string name="community_recover_malformed">这不是恢复密钥。它应为 43 个字符，且不含空格。</string>
+    <string name="community_recover_unknown">服务器上没有账号使用这个密钥。请检查是否漏输或输错了字符——错一个字符就是另一个密钥，而不是密钥坏了。</string>
+    <string name="community_recover_failed">无法连接服务器，请稍后重试。</string>
+    <string name="community_recover_done">欢迎回来，%1$s</string>
+    <string name="community_intro_optin">开启</string>
+    <string name="community_intro_skip">暂不开启</string>
+    <string name="community_telemetry_title">帮助图源排名</string>
+    <string name="community_telemetry_body">图源失败、超时或没有返回结果时，应用可以上报这些情况，让所有人的搜索都优先展示真正可用的图源。\n\n上报内容只有：哪个图源、是否成功、速度多快。绝不会包含漫画标题、你输入的搜索词或你打开的页面。上报标识符每天轮换。</string>
+    <string name="community_telemetry_yes">分享可靠性数据</string>
+    <string name="community_telemetry_no">不分享</string>
+    <string name="community_nickname_title">选一个昵称</string>
+    <string name="community_nickname_body">评论会显示你选择的昵称，后面跟着专属于你的 4 个字符。没有人能抢走你的名字，也没有人能冒充你。
+
+可以跳过——跳过后你将显示为 anon。</string>
+    <string name="community_nickname_preview">你将显示为 %1$s</string>
+    <string name="community_nickname_continue">继续</string>
+    <string name="community_nickname_back">返回</string>
+    <string name="community_nickname_required">请填写昵称后再继续</string>
+    <string name="community_nickname_too_short">再长一点</string>
+    <string name="community_nickname_invalid">只能包含字母、数字和空格</string>
+    <string name="community_sponsor_title">赞助款的去向</string>
+    <string name="community_sponsor_body">Kotatsu-Redo 免费且没有广告。赞助首先用于支付服务器费用，其余部分平均分配：</string>
+    <string name="community_sponsor_split_translation">翻译工作</string>
+    <string name="community_sponsor_split_charity">V 基金会（癌症研究）</string>
+    <string name="community_sponsor_split_server">服务器成本</string>
+    <string name="community_sponsor_reports">收支报告会发布在 Discord 上。</string>
+    <string name="community_sponsor_open">成为赞助者</string>
+    <string name="community_sponsor_dismiss">以后再说</string>
+
+    <!-- Community: comments -->
+    <string name="community_comments">评论</string>
+    <string name="community_comments_sort_top">热门</string>
+    <string name="community_comments_sort_new">最新</string>
+    <string name="community_comments_empty">还没有评论，来聊聊这部作品吧。</string>
+    <string name="community_comments_unavailable">评论功能暂时不可用。</string>
+    <string name="community_comments_heading_count">· %1$d</string>
+    <string name="community_comments_subtitle_other">%1$s · 其他语言另有 %2$d 条</string>
+    <string name="community_comment_hint">发表评论</string>
+    <string name="community_comment_spoiler">剧透</string>
+    <string name="community_comment_spoiler_hidden">剧透——点按查看</string>
+    <string name="community_comment_send">发送</string>
+    <string name="community_comment_reply">回复</string>
+    <string name="community_comment_edit">编辑</string>
+    <string name="community_comment_delete">删除</string>
+    <string name="community_comment_delete_confirm">此操作无法撤销。对它的回复会保留。</string>
+    <string name="community_comment_like">赞</string>
+    <string name="community_comment_dislike">踩</string>
+    <string name="community_comment_deleted">已删除</string>
+    <string name="community_comment_deleted_author">—</string>
+    <string name="community_comment_replying_to">回复 %s</string>
+    <string name="community_comment_editing">正在编辑你的评论</string>
+    <string name="community_comment_not_posted">未发布</string>
+    <string name="community_comment_blocked">“%s”在此处不被允许。请修改该部分后重试。</string>
+    <string name="community_comment_filter_wrong">内容有误</string>
+    <string name="community_comment_filter_reported">谢谢——版工会处理的。</string>
+    <string name="community_comment_too_short">评论至少需要 %d 个字符。</string>
+    <string name="community_comment_chain_depth">你在这个讨论串里回复的次数已经够多了，把机会留给别人吧。</string>
+    <string name="community_comment_rate_limited">发送太频繁了，请稍后再试。</string>
+    <string name="community_comment_banned">你的账号已被禁言。</string>
+    <string name="community_comment_failed">发送失败，请检查网络连接后重试。</string>
+    <string name="community_rules">社区规则</string>
+    <string name="community_export">导出我的数据</string>
+    <string name="community_export_summary">保存一份你的评论、评分和投票</string>
+    <string name="community_export_failed">无法下载你的数据，请检查网络连接后重试。</string>
+    <string name="community_terms">条款</string>
+    <string name="community_privacy">隐私</string>
+    <string name="community_age_notice">使用评论和评分需年满 18 岁。无论是否开启，阅读功能完全不受影响。</string>
+    <string name="community_policy_links">开启即表示你同意《%1$s》和《%2$s》。</string>
+    <string name="community_replies">回复</string>
+    <string name="community_reply_from">%s 回复了你</string>
+
+    <plurals name="community_rating_count">
+        <item quantity="other">%d 个评分</item>
+    </plurals>
+    <plurals name="community_comments_count">
+        <item quantity="other">%d 条评论</item>
+    </plurals>
+    <plurals name="community_comment_rate_limited_in">
+        <item quantity="other">新账号目前的发言量已达上限，请约 %1$d 分钟后再试。</item>
+    </plurals>
+    <plurals name="community_replies_count">
+        <item quantity="other">%d 条新回复</item>
+    </plurals>
 </resources>
