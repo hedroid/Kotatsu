@@ -15,7 +15,6 @@ import dagger.hilt.android.AndroidEntryPoint
 import org.koitharu.kotatsu.R
 import org.koitharu.kotatsu.alternatives.domain.AlternativeSearchStatus
 import org.koitharu.kotatsu.alternatives.domain.AlternativeSortOrder
-import org.koitharu.kotatsu.alternatives.domain.AlternativeSourceScope
 import org.koitharu.kotatsu.core.exceptions.resolve.SnackbarErrorObserver
 import org.koitharu.kotatsu.core.model.getTitle
 import org.koitharu.kotatsu.core.nav.router
@@ -87,7 +86,7 @@ class AlternativesActivity : BaseActivity<ActivityAlternativesBinding>(),
 			viewBinding.toolbar.post { filterBadge.setBadgeVisible(viewModel.hasCustomOptions()) }
 			invalidateMenu()
 		}
-		viewModel.activePresetTitle.observe(this) {
+		viewModel.scopeOptions.observe(this) {
 			updateSummaryChips()
 			invalidateMenu()
 		}
@@ -147,19 +146,12 @@ class AlternativesActivity : BaseActivity<ActivityAlternativesBinding>(),
 
 	private fun showSourceScopeMenu(anchor: View) {
 		PopupMenu(this, anchor).apply {
-			viewModel.activePresetTitle.value?.let { presetTitle ->
-				menu.add(POPUP_GROUP, ACTION_SCOPE_PRESET, Menu.NONE, presetTitle).isChecked =
-					viewModel.options.value.sourceScope == AlternativeSourceScope.CURRENT_PRESET
-			}
-			menu.add(POPUP_GROUP, ACTION_SCOPE_ENABLED, Menu.NONE, R.string.enabled_sources).isChecked =
-				viewModel.options.value.sourceScope == AlternativeSourceScope.ENABLED
-			menu.setGroupCheckable(POPUP_GROUP, true, true)
+			val scopeOptions = viewModel.scopeOptions.value
+			SourceScopeMenu.populate(menu, POPUP_GROUP, scopeOptions, viewModel.options.value.sourceScope)
 			setOnMenuItemClickListener { item ->
-				when (item.itemId) {
-					ACTION_SCOPE_PRESET -> viewModel.setSourceScope(AlternativeSourceScope.CURRENT_PRESET)
-					ACTION_SCOPE_ENABLED -> viewModel.setSourceScope(AlternativeSourceScope.ENABLED)
-					else -> return@setOnMenuItemClickListener false
-				}
+				val scope = SourceScopeMenu.scopeFor(item.itemId, scopeOptions)
+					?: return@setOnMenuItemClickListener false
+				viewModel.setSourceScope(scope)
 				true
 			}
 			show()
@@ -240,12 +232,7 @@ class AlternativesActivity : BaseActivity<ActivityAlternativesBinding>(),
 			status.totalSources == 0 -> getString(R.string.preparing_search)
 			else -> getString(R.string.searching_sources_progress, status.completedSources, status.totalSources)
 		}
-		val sourceScopeTitle = when (options.sourceScope) {
-			AlternativeSourceScope.CURRENT_PRESET ->
-				viewModel.activePresetTitle.value ?: getString(R.string.source_presets)
-
-			AlternativeSourceScope.ENABLED -> getString(R.string.enabled_sources)
-		}
+		val sourceScopeTitle = SourceScopeMenu.title(this, options.sourceScope, viewModel.scopeOptions.value)
 		viewBinding.chipsSummary.setChips(
 			buildList {
 				add(
@@ -341,8 +328,6 @@ class AlternativesActivity : BaseActivity<ActivityAlternativesBinding>(),
 
 	private companion object {
 		const val POPUP_GROUP = Menu.FIRST + 2000
-		const val ACTION_SCOPE_PRESET = Menu.FIRST + 2001
-		const val ACTION_SCOPE_ENABLED = Menu.FIRST + 2002
 		const val ACTION_SORT_FIRST = Menu.FIRST + 2010
 	}
 }

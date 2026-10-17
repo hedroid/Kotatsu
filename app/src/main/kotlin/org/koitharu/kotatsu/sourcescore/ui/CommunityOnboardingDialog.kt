@@ -34,6 +34,7 @@ import kotlinx.coroutines.launch
 import org.koitharu.kotatsu.parsers.util.runCatchingCancellable
 import android.widget.Toast
 import org.koitharu.kotatsu.sourcescore.data.IdentityResponse
+import org.koitharu.kotatsu.sourcescore.data.nicknameRejection
 import org.koitharu.kotatsu.sourcescore.data.CommunityApi
 import org.koitharu.kotatsu.sourcescore.data.CommunitySettings
 import org.koitharu.kotatsu.stats.ui.views.PieChartView
@@ -81,7 +82,12 @@ class CommunityOnboardingDialog : DialogFragment() {
 	private lateinit var nicknameInput: TextInputEditText
 	private lateinit var nicknamePreview: TextView
 
+	/** Opened straight on the nickname step, for someone already opted in who never picked a name. */
+	private val isNameOnly: Boolean
+		get() = arguments?.getBoolean(ARG_NAME_ONLY) == true
+
 	override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
+		if (isNameOnly) step = STEP_NICKNAME
 		val view = LayoutInflater.from(context).inflate(R.layout.dialog_community_onboarding, null)
 		flipper = view.findViewById(R.id.flipper)
 		titleView = view.findViewById(R.id.textView_title)
@@ -127,6 +133,9 @@ class CommunityOnboardingDialog : DialogFragment() {
 			(dialog.getButton(AlertDialog.BUTTON_POSITIVE).parent as? ButtonBarLayout)
 				?.setAllowStacking(false)
 			render(dialog)
+			// The key may already belong to a named account the device forgot; if so there is
+			// nothing to ask, and tryRestore closes the dialog once the server has said so.
+			if (isNameOnly) tryRestore()
 		}
 		return dialog
 	}
@@ -252,9 +261,7 @@ class CommunityOnboardingDialog : DialogFragment() {
 				advance(dialog, nextAfterTelemetry())
 			}
 
-			// Validated here rather than on the server round trip, so a typo is caught before the
-			// step advances and the user has to come back to Settings to fix it.
-			STEP_NICKNAME -> if (saveNickname()) advance(dialog, STEP_SPONSOR)
+			STEP_NICKNAME -> submitNickname(dialog)
 
 			STEP_SPONSOR -> {
 				openSponsorPage()
@@ -402,6 +409,9 @@ class CommunityOnboardingDialog : DialogFragment() {
 			restored = identity
 			settings.nickname = identity.nickname
 			settings.syncedNickname = identity.nickname
+			if (isNameOnly && step == STEP_NICKNAME) {
+				(dialog as? AlertDialog)?.let(::finish)
+			}
 			// Said out loud rather than silently skipping a step: coming back to an account you had
 			// forgotten about is exactly the moment to be told whose it is.
 			Toast.makeText(
@@ -417,26 +427,47 @@ class CommunityOnboardingDialog : DialogFragment() {
 		if (restored?.nickname.isNullOrEmpty()) STEP_NICKNAME else STEP_SPONSOR
 
 	/**
-	 * @return true when the nickname is acceptable and stored. It is pushed to the server by the sync
-	 * job rather than here, because at this point the identity may not be registered yet.
+	 * Sends the nickname now, and advances only once the server has it or cannot be reached.
+	 *
+	 * It used to be stored locally and left for the daily sync job, which runs only on unmetered Wi-Fi.
+	 * The account was then created by the first comment or rating without a name, so everything the
+	 * user wrote appeared as `anon#xxxx` while the app kept showing the name they had picked.
+	 *
+	 * The call registers the identity if needed (see CommunityApi's authenticator); consent was given at
+	 * the first step. A rejection - a reserved name, the word filter - is shown here, where the user can
+	 * still fix it. An unreachable server does not block onboarding: the name stays pending and is sent
+	 * with the next community call.
 	 */
-	private fun saveNickname(): Boolean {
+	private fun submitNickname(dialog: AlertDialog) {
+		val value = validNicknameOrNull() ?: return
+		val positive = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+		positive.isEnabled = false
+		lifecycleScope.launch {
+			val result = runCatchingCancellable { api.setNickname(value) }
+			positive.isEnabled = true
+			result.exceptionOrNull()?.let(::nicknameRejection)?.let { rejection ->
+				nicknameLayout.error = nicknameRejectionMessage(requireContext(), rejection)
+				return@launch
+			}
+			settings.nickname = value
+			if (result.isSuccess) settings.syncedNickname = value
+			// Someone brought back just for their name has already seen the rest.
+			if (isNameOnly) finish(dialog) else advance(dialog, STEP_SPONSOR)
+		}
+	}
+
+	/** Local checks first, so a typo is caught without a round trip. */
+	private fun validNicknameOrNull(): String? {
 		val value = nicknameInput.text?.toString()?.trim().orEmpty()
-		if (value.isEmpty()) {
-			nicknameLayout.error = getString(R.string.community_nickname_required)
-			return false
+		nicknameLayout.error = when {
+			value.isEmpty() -> getString(R.string.community_nickname_required)
+			value.length < NICKNAME_MIN -> getString(R.string.community_nickname_too_short)
+			value.any { !it.isLetterOrDigit() && !it.isWhitespace() && it != '_' && it != '-' } ->
+				getString(R.string.community_nickname_invalid)
+
+			else -> null
 		}
-		if (value.length < NICKNAME_MIN) {
-			nicknameLayout.error = getString(R.string.community_nickname_too_short)
-			return false
-		}
-		if (value.any { !it.isLetterOrDigit() && !it.isWhitespace() && it != '_' && it != '-' }) {
-			nicknameLayout.error = getString(R.string.community_nickname_invalid)
-			return false
-		}
-		nicknameLayout.error = null
-		settings.nickname = value
-		return true
+		return value.takeIf { nicknameLayout.error == null }
 	}
 
 	/** Shows the discriminator as it will actually appear, so it is not a surprise later. */
@@ -510,6 +541,7 @@ class CommunityOnboardingDialog : DialogFragment() {
 	companion object {
 
 		private const val TAG = "community_onboarding"
+		private const val ARG_NAME_ONLY = "name_only"
 
 		/** Shared with CommunityApi so one logcat filter shows the whole identity story. */
 		private const val TAG_LOG = "CommunityIdentity"
@@ -532,12 +564,27 @@ class CommunityOnboardingDialog : DialogFragment() {
 		private const val COLOR_SERVER = 0xFF7A7A7A.toInt()
 
 		fun showIfNeeded(context: Context, settings: CommunitySettings, fm: FragmentManager) {
+			if (fm.findFragmentByTag(TAG) != null) return
+			// Opted in but never named: the app was closed between the opt-in and the nickname step,
+			// which used to leave the dialog gone for good and the account anonymous. Pick up there.
+			// Going back from that step still leads to the opt-in, where declining is a real choice.
+			if (settings.isEnabled && settings.nickname.isNullOrEmpty()) {
+				showNicknameStep(fm)
+				return
+			}
 			// Either flag is proof the question has been put. `isEnabled` is set the moment somebody
 			// opts in, so it covers anyone who answered on a build that only recorded the answer at
 			// the last step - they would otherwise be asked again on every single launch, forever.
 			if (settings.hasSeenOnboarding || settings.isEnabled) return
-			if (fm.findFragmentByTag(TAG) != null) return
 			CommunityOnboardingDialog().show(fm, TAG)
+		}
+
+		/** The nickname step on its own - see [isNameOnly]. */
+		fun showNicknameStep(fm: FragmentManager) {
+			if (fm.findFragmentByTag(TAG) != null) return
+			CommunityOnboardingDialog().apply {
+				arguments = Bundle(1).apply { putBoolean(ARG_NAME_ONLY, true) }
+			}.show(fm, TAG)
 		}
 
 		fun show(fm: FragmentManager) {

@@ -8,6 +8,7 @@ import org.koitharu.kotatsu.sourcescore.data.CommunityDatabase
 import org.koitharu.kotatsu.sourcescore.data.CommunitySettings
 import org.koitharu.kotatsu.sourcescore.data.ProbeDto
 import org.koitharu.kotatsu.sourcescore.data.SourceScoreEntity
+import org.koitharu.kotatsu.sourcescore.data.nicknameRejection
 import java.time.LocalDate
 import java.time.ZoneOffset
 import javax.inject.Inject
@@ -59,8 +60,8 @@ class SourceScoreSyncUseCase @Inject constructor(
 				}
 		}
 
-		// The nickname is chosen during onboarding, before the identity exists, so it is pushed on the
-		// first sync after registration rather than from the dialog.
+		// Onboarding and the api push the nickname as soon as the account exists; this is the backstop
+		// for a push that failed while offline.
 		pushNicknameIfPending()
 
 		if (settings.isTelemetryEnabled) {
@@ -73,7 +74,11 @@ class SourceScoreSyncUseCase @Inject constructor(
 		val nickname = settings.nickname ?: return
 		if (nickname == settings.syncedNickname) return
 		runCatchingCancellable { api.setNickname(nickname) }
-			.onFailure { Log.w(TAG, "Nickname push failed; will retry next sync", it) }
+			.onFailure {
+				Log.w(TAG, "Nickname push failed", it)
+				// Refused rather than unreachable: stop showing a name the server will never display.
+				if (nicknameRejection(it) != null) settings.nickname = settings.syncedNickname
+			}
 			.onSuccess { settings.syncedNickname = nickname }
 	}
 

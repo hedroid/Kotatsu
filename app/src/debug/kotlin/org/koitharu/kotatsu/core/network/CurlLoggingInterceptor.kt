@@ -13,6 +13,14 @@ class CurlLoggingInterceptor(
 
 	private val escapeRegex = Regex("([\\[\\]\"])")
 
+	// Logcat is readable by anyone with adb or a bug report. The community server's bearer secret is
+	// the account itself, and sync logins post a password, so neither may appear here.
+	private val redactedHeaders = setOf("authorization", "proxy-authorization")
+	private val redactedBodyFields = Regex(
+		"(\"(?:password|secret|token|access_token|refresh_token|ssaid|drm_id)\"\\s*:\\s*)\"[^\"]*\"",
+		RegexOption.IGNORE_CASE,
+	)
+
 	override fun intercept(chain: Interceptor.Chain): Response = chain.proceed(chain.request()).also {
 		logRequest(it.networkResponse?.request ?: it.request)
 	}
@@ -31,7 +39,8 @@ class CurlLoggingInterceptor(
 			if (name.equals(ACCEPT_ENCODING, ignoreCase = true) && value.equals("gzip", ignoreCase = true)) {
 				isCompressed = true
 			}
-			curlCmd.append(" -H \"").append(name).append(": ").append(value.escape()).append('\"')
+			val shown = if (name.lowercase() in redactedHeaders) "REDACTED" else value.escape()
+			curlCmd.append(" -H \"").append(name).append(": ").append(shown).append('\"')
 		}
 
 		val body = request.body
@@ -40,7 +49,11 @@ class CurlLoggingInterceptor(
 			body.writeTo(buffer)
 			val charset = body.contentType()?.charset() ?: Charsets.UTF_8
 			curlCmd.append(" --data-raw '")
-				.append(buffer.readString(charset).replace("\n", "\\n"))
+				.append(
+					buffer.readString(charset)
+						.replace(redactedBodyFields) { it.groupValues[1] + "\"REDACTED\"" }
+						.replace("\n", "\\n"),
+				)
 				.append("'")
 		}
 		if (isCompressed) {

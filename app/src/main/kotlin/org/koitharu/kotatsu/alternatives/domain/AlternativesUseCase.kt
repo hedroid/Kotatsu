@@ -130,8 +130,12 @@ class AlternativesUseCase @Inject constructor(
 		sameContentTypeOnly: Boolean = false,
 	): List<MangaSource> {
 		val sources = when (sourceScope) {
-			AlternativeSourceScope.CURRENT_PRESET -> getActivePreset()?.let(::getPresetSources).orEmpty()
-			AlternativeSourceScope.ENABLED -> sourcesRepository.getEnabledSources()
+			is AlternativeSourceScope.Preset -> presetsRepository.getById(sourceScope.id)
+				?.let(::getPresetSources)
+				.orEmpty()
+
+			AlternativeSourceScope.Enabled -> sourcesRepository.getEnabledSources()
+			AlternativeSourceScope.Disabled -> sourcesRepository.getDisabledSources().toList()
 		}
 		val candidates = sources.asSequence()
 			.distinctBy(MangaSource::name)
@@ -163,19 +167,24 @@ class AlternativesUseCase @Inject constructor(
 		ref: MangaSource,
 		sameLanguageOnly: Boolean = false,
 	): AlternativeSourceScopeOptions {
-		val preset = getActivePreset()
-		val hasPresetCandidates = preset != null && getPresetSources(preset).any { source ->
-			source.name != ref.name &&
-				(!settings.isNsfwContentDisabled || !source.isNsfw()) &&
-				(!sameLanguageOnly || source.hasSameLanguageAs(ref))
-		}
+		fun MangaSource.isCandidate() = name != ref.name &&
+			(!settings.isNsfwContentDisabled || !isNsfw()) &&
+			(!sameLanguageOnly || hasSameLanguageAs(ref))
+
+		// A preset with nothing searchable for this manga would only ever produce an empty screen.
+		val presets = presetsRepository.getAll()
+			.filter { preset -> getPresetSources(preset).any { it.isCandidate() } }
+			.map { AlternativeSourceScopeOptions.PresetChoice(it.id, it.title) }
+		val activePresetId = settings.activeSourcePresetId
 		return AlternativeSourceScopeOptions(
-			defaultScope = if (hasPresetCandidates) {
-				AlternativeSourceScope.CURRENT_PRESET
+			// Unchanged default: the active preset when it has candidates, otherwise enabled sources.
+			defaultScope = if (presets.any { it.id == activePresetId }) {
+				AlternativeSourceScope.Preset(activePresetId)
 			} else {
-				AlternativeSourceScope.ENABLED
+				AlternativeSourceScope.Enabled
 			},
-			presetTitle = preset?.title?.takeIf { hasPresetCandidates },
+			presets = presets,
+			hasDisabledSources = sourcesRepository.getDisabledSources().any { it.isCandidate() },
 		)
 	}
 
@@ -287,10 +296,6 @@ class AlternativesUseCase @Inject constructor(
 				== true)
 		}
 	}
-
-	private suspend fun getActivePreset(): SourcePreset? = settings.activeSourcePresetId
-		.takeIf { it != 0L }
-		?.let { presetsRepository.getById(it) }
 
 	private fun getPresetSources(preset: SourcePreset): List<MangaSource> {
 		if (preset.sources.isEmpty()) return emptyList()

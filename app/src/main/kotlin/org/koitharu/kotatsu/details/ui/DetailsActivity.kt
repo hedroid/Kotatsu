@@ -120,6 +120,7 @@ import com.google.android.material.R as materialR
 import org.koitharu.kotatsu.sourcescore.ui.CommunityCommentsSheet
 import org.koitharu.kotatsu.sourcescore.ui.CommunityRatingDelegate
 import org.koitharu.kotatsu.sourcescore.ui.StarRowBinder
+import org.koitharu.kotatsu.sourcescore.ui.CommunityNameGate
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.launch
@@ -140,6 +141,9 @@ class DetailsActivity :
 
 	@Inject
 	lateinit var communityRating: CommunityRatingDelegate
+
+	@Inject
+	lateinit var communityNameGate: CommunityNameGate
 
 	@Inject
 	lateinit var shortcutManager: AppShortcutManager
@@ -659,6 +663,8 @@ class DetailsActivity :
 			).mapNotNull { it },
 			scope = lifecycleScope,
 		) { value ->
+			// A rating is published under the user's name, so there has to be one first.
+			if (!communityNameGate.ensureNamed(supportFragmentManager)) return@StarRowBinder false
 			val updated = communityRating.rate(manga, value)
 			if (updated == null) {
 				Snackbar.make(
@@ -669,6 +675,7 @@ class DetailsActivity :
 			} else {
 				showCommunityRating(updated)
 			}
+			true
 		}
 
 		// Up immediately, in its loading state. Waiting for the round trip meant the row appeared a

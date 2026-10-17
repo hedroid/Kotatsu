@@ -1,9 +1,12 @@
 package org.koitharu.kotatsu.sourcescore.data
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import okhttp3.Authenticator
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -46,6 +49,12 @@ data class FingerprintDto(
 	@SerialName("content_type") val contentType: String? = null,
 	val nsfw: Boolean = false,
 	@SerialName("external_ids") val externalIds: Map<String, String> = emptyMap(),
+	/**
+	 * The genres this source lists, raw. The server maps them onto its own closed vocabulary and
+	 * publishes one only once several accounts have reported it, so a parser's own labels - and its
+	 * oddities - cost nothing and reach nobody.
+	 */
+	val genres: List<String> = emptyList(),
 )
 
 @Serializable
@@ -62,6 +71,35 @@ data class ResolvedDto(
 
 @Serializable
 data class ResolveResponse(val resolved: List<ResolvedDto> = emptyList())
+
+@Serializable
+data class WorkSourceDto(
+	val source: String,
+	val key: String,
+	val reporters: Int = 0,
+	@SerialName("last_seen") val lastSeen: String? = null,
+	val verified: Boolean = false,
+)
+
+@Serializable
+data class SimilarWorkDto(
+	@SerialName("work_id") val workId: String,
+	val title: String,
+	val year: Int? = null,
+	@SerialName("content_type") val contentType: String? = null,
+	val nsfw: Boolean = false,
+	val genres: List<String> = emptyList(),
+	@SerialName("shared_genres") val sharedGenres: Int = 0,
+	/** Weight of the shared genres: rare ones count for more. Comparable within one response. */
+	val score: Double = 0.0,
+	val sources: List<WorkSourceDto> = emptyList(),
+)
+
+@Serializable
+data class SimilarWorksResponse(
+	@SerialName("work_id") val workId: String,
+	val similar: List<SimilarWorkDto> = emptyList(),
+)
 
 @Serializable
 data class RatingResponse(
@@ -137,7 +175,11 @@ data class PostCommentRequest(
 data class EditCommentRequest(val body: String, val lang: String? = null)
 
 @Serializable
-data class VoteRequest(val value: Int)
+data class VoteRequest(
+	val value: Int,
+	/** With [value] 0, the server puts back the vote this one replaced instead of clearing it. */
+	@SerialName("restore_previous") val restorePrevious: Boolean = false,
+)
 
 @Serializable
 data class NotificationDto(
@@ -312,6 +354,36 @@ class CommunityApi @Inject constructor(
 		return response.use { json.decodeFromString<ResolveResponse>(it.requireBody()) }.resolved.firstOrNull()
 	}
 
+	/**
+	 * Works the server considers like this one, with the sources that carry them.
+	 *
+	 * Item to item: the answer depends only on the work asked about. Blending several of these into
+	 * a suggestion list happens on this device, so the reading history behind it never leaves.
+	 */
+	suspend fun fetchSimilar(workId: String): List<SimilarWorkDto> {
+		val response = authedClient.newCall(request("/v1/works/$workId/similar").get().build()).await()
+		return response.use { json.decodeFromString<SimilarWorksResponse>(it.requireBody()) }.similar
+	}
+
+	/**
+	 * The same answer for a reader without community features: works like the manga at [key] on
+	 * [source], asked anonymously.
+	 *
+	 * Nothing identifies the device - no credential, no region, the bare client - and the server
+	 * stores nothing about the request. It only knows manga other readers have already established,
+	 * so an unknown one is null rather than an error.
+	 */
+	suspend fun fetchSimilarPublic(source: String, key: String): SimilarWorksResponse? {
+		val url = (settings.serverUrl + "/v1/public/similar").toHttpUrl().newBuilder()
+			.addQueryParameter("source", source)
+			.addQueryParameter("key", key)
+			.build()
+		val response = okHttpClient.newCall(Request.Builder().url(url).get().build()).await()
+		return response.use {
+			if (it.code == 404) null else json.decodeFromString<SimilarWorksResponse>(it.requireBody())
+		}
+	}
+
 	suspend fun fetchRating(workId: String): RatingResponse {
 		val response = authedClient.newCall(request("/v1/works/$workId/rating").get().build()).await()
 		return response.use { json.decodeFromString(it.requireBody()) }
@@ -390,9 +462,12 @@ class CommunityApi @Inject constructor(
 		}
 	}
 
-	/** @param value +1, -1, or 0 to withdraw. Idempotent, so a retry cannot double-count. */
+	/**
+	 * @param value +1, -1, or 0 to withdraw. Idempotent, so a retry cannot double-count.
+	 *  Withdrawing a switched vote restores the one it replaced: like, dislike, un-dislike keeps the like.
+	 */
 	suspend fun voteComment(commentId: String, value: Int): CommentDto {
-		val payload = json.encodeToString(VoteRequest(value))
+		val payload = json.encodeToString(VoteRequest(value, restorePrevious = value == 0))
 		val response = authedClient.newCall(
 			request("/v1/comments/$commentId/vote").put(payload.asJson()).build(),
 		).await()
@@ -458,6 +533,13 @@ class CommunityApi @Inject constructor(
 	 */
 	private val authedClient: OkHttpClient by lazy {
 		okHttpClient.newBuilder()
+			// Heals an account registered before its nickname reached the server: onboarding used to
+			// leave the name for a daily Wi-Fi-only job, so the first comment went out as `anon`.
+			.addInterceptor { chain ->
+				val isIdentityCall = chain.request().url.encodedPath.contains("/v1/identity/")
+				if (settings.isRegistered && !isIdentityCall) pushPendingNicknameBlocking()
+				chain.proceed(chain.request())
+			}
 			.authenticator(
 				Authenticator { _, response ->
 					// One retry only. If registering did not help, the 401 is real - a ban, say - and
@@ -506,7 +588,88 @@ class CommunityApi @Inject constructor(
 			}
 		}.getOrDefault(false)
 		settings.isRegistered = ok
+		// Before the request that triggered registration is retried - a comment - so it is already
+		// shown under the chosen name rather than `anon`.
+		if (ok) pushPendingNicknameBlocking()
 		ok
+	}
+
+	private val nicknameLock = ReentrantLock()
+
+	/**
+	 * The nickname tried in this process and answered by the server. Cleared again whenever the
+	 * attempt says nothing about the name - offline, a 429, a 5xx - so the next call retries it
+	 * rather than leaving a name the user believes is set sitting on the device forever.
+	 */
+	@Volatile
+	private var attemptedNickname: String? = null
+
+	/** True while a chosen name has not reached the server. The settings screen says so. */
+	val isNicknamePending: Boolean
+		get() = settings.nickname?.let { it != settings.syncedNickname } == true
+
+	/** Retries a pending name now, e.g. when the community settings screen opens. */
+	suspend fun pushPendingNickname() = withContext(Dispatchers.IO) { pushPendingNicknameBlocking() }
+
+	private enum class NicknamePush { Accepted, Unauthorized, Refused, Failed }
+
+	/**
+	 * Sends the locally chosen nickname if the server does not have it yet.
+	 *
+	 * Uses the bare client for the same reason as [registerBlocking]. Best-effort: the settings screen
+	 * and onboarding are where a rejected name is explained to the user.
+	 */
+	private fun pushPendingNicknameBlocking() {
+		val nickname = settings.nickname ?: return
+		if (nickname == settings.syncedNickname || nickname == attemptedNickname) return
+		nicknameLock.withLock {
+			if (nickname == settings.syncedNickname || nickname == attemptedNickname) return
+			// Held for the whole sequence, so the push [registerBlocking] makes on success returns
+			// immediately instead of sending the same name twice.
+			attemptedNickname = nickname
+			// A 401 means this key was never introduced. Registering here rather than waiting for some
+			// later call to 401 is what stops a name chosen while the server was unreachable from
+			// staying pending forever - that call may never come.
+			val outcome = sendNicknameBlocking(nickname).let { first ->
+				if (first == NicknamePush.Unauthorized && registerBlocking()) {
+					sendNicknameBlocking(nickname)
+				} else {
+					first
+				}
+			}
+			// Only the server having spoken ends the attempts.
+			if (outcome != NicknamePush.Accepted && outcome != NicknamePush.Refused) {
+				attemptedNickname = null
+			}
+		}
+	}
+
+	private fun sendNicknameBlocking(nickname: String): NicknamePush {
+		val body = json.encodeToString(NicknameRequest(nickname))
+		return runCatching {
+			okHttpClient.newCall(request("/v1/identity/nickname").post(body.asJson()).build()).execute().use {
+				when {
+					it.isSuccessful -> {
+						settings.syncedNickname = nickname
+						NicknamePush.Accepted
+					}
+
+					it.code == 401 -> NicknamePush.Unauthorized
+					// Refused: stop showing a name the server will never display.
+					isNicknameRejection(it.code) -> {
+						android.util.Log.w(IDENTITY_TAG, "nickname rejected -> HTTP " + it.code)
+						settings.nickname = settings.syncedNickname
+						NicknamePush.Refused
+					}
+
+					else -> {
+						android.util.Log.w(IDENTITY_TAG, "nickname push -> HTTP " + it.code)
+						NicknamePush.Failed
+					}
+				}
+			}
+		}.onFailure { android.util.Log.w(IDENTITY_TAG, "nickname push failed", it) }
+			.getOrDefault(NicknamePush.Failed)
 	}
 
 	private fun request(path: String) = Request.Builder()

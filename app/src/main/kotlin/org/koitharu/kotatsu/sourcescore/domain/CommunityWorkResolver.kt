@@ -34,6 +34,9 @@ class CommunityWorkResolver @Inject constructor(
 
 	suspend fun workIdFor(manga: Manga): String? {
 		if (!settings.isEnabled) return null
+		// Local files and the unknown/test placeholders have no site behind them: the key is a path on
+		// this device and the title a folder name, so there is no community work to find.
+		val parserSource = manga.source as? MangaParserSource ?: return null
 		val sourceKey = manga.url.ifEmpty { return null }
 		val source = manga.source.name
 		if (
@@ -49,7 +52,6 @@ class CommunityWorkResolver @Inject constructor(
 		val dao = database.getWorkRefDao()
 		dao.find(source, sourceKey)?.let { return it.workId }
 
-		val parserSource = manga.source as? MangaParserSource
 		val resolved = runCatchingCancellable {
 			api.resolveWork(
 				FingerprintDto(
@@ -62,8 +64,17 @@ class CommunityWorkResolver @Inject constructor(
 						.mapNotNull { it.toWireTitle() }
 						.distinct()
 						.take(MAX_ALT_TITLES),
-					contentType = parserSource?.contentType?.name?.lowercase(),
+					contentType = parserSource.contentType.name.lowercase(),
 					nsfw = manga.isNsfw,
+					// What this source calls the work's genres. Sent with the fingerprint that was
+					// going out anyway: it describes the manga, not the reader, and it is how works
+					// no catalogue has ever listed - most of them - get categories at all.
+					genres = manga.tags.asSequence()
+						.map { it.title.trim() }
+						.filter { it.length in 1..MAX_GENRE_LABEL && it.none(Char::isISOControl) }
+						.distinct()
+						.take(MAX_GENRES)
+						.toList(),
 				),
 			)
 		}.onFailure { Log.w(TAG, "Work resolution failed for ${manga.title}", it) }.getOrNull()
@@ -112,6 +123,10 @@ class CommunityWorkResolver @Inject constructor(
 		const val MAX_SOURCE_KEY_LENGTH = 512
 		const val MAX_TITLE_LENGTH = 500
 		const val MAX_ALT_TITLES = 32
+
+		/** Bounded well under the server's own cap: a work with fifty labels has ten real genres. */
+		const val MAX_GENRES = 20
+		const val MAX_GENRE_LABEL = 60
 		val SOURCE_PATTERN = Regex("[A-Za-z0-9_.-]+")
 	}
 }

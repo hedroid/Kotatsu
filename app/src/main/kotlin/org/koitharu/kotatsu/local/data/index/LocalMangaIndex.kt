@@ -5,6 +5,7 @@ import androidx.core.content.edit
 import androidx.room.withTransaction
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.FlowCollector
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.koitharu.kotatsu.core.db.MangaDatabase
@@ -41,31 +42,25 @@ class LocalMangaIndex @Inject constructor(
 	}
 
 	suspend fun update() = mutex.withLock {
-		db.withTransaction {
-			val dao = db.getLocalMangaIndexDao()
-			dao.clear()
-			localMangaRepositoryProvider.get()
-				.getRawListAsFlow()
-				.collect { upsert(it) }
-		}
-		currentVersion = VERSION
+		rebuild()
 	}
 
 	suspend fun updateIfRequired() {
 		if (isUpdateRequired()) {
-			update()
+			mutex.withLock {
+				// The first build may have finished while this caller was waiting for it
+				if (isUpdateRequired()) {
+					rebuild()
+				}
+			}
 		}
 	}
 
 	suspend fun get(mangaId: Long, withDetails: Boolean): LocalManga? {
 		updateIfRequired()
-		var path = db.getLocalMangaIndexDao().findPath(mangaId)
-		if (path == null && mutex.isLocked) { // wait for updating complete
-			path = mutex.withLock { db.getLocalMangaIndexDao().findPath(mangaId) }
-		}
-		if (path == null) {
-			return null
-		}
+		// A rebuild in progress leaves the previous index in place until it commits, so a miss here
+		// is an answer rather than a reason to wait for the whole storage scan
+		val path = db.getLocalMangaIndexDao().findPath(mangaId) ?: return null
 		return runCatchingCancellable {
 			LocalMangaParser(File(path)).getManga(withDetails)
 		}.onFailure {
@@ -94,6 +89,27 @@ class LocalMangaIndex @Inject constructor(
 		} else {
 			dao.findTags()
 		}
+	}
+
+	/**
+	 * Scans local storage first and writes the index afterwards, in one short transaction.
+	 *
+	 * The scan opens every archive and folder in every storage directory: minutes on a large library
+	 * or slow storage, and forever if a read hangs. It used to run inside the transaction, holding
+	 * SQLite's only write connection the whole time. Every other transaction queued behind it, and so
+	 * did every newly subscribed Room Flow, since subscribing installs triggers through the writer.
+	 * Those waits block threads of Room's 4-thread executor, and once it is exhausted nothing can be
+	 * read at all - history, favourites and sources stay empty. This runs on every cold start.
+	 */
+	private suspend fun rebuild() {
+		val found = localMangaRepositoryProvider.get()
+			.getRawListAsFlow()
+			.toList()
+		db.withTransaction {
+			db.getLocalMangaIndexDao().clear()
+			found.forEach { upsert(it) }
+		}
+		currentVersion = VERSION
 	}
 
 	private suspend fun upsert(manga: LocalManga) {

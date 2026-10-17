@@ -115,11 +115,16 @@ class CommunitySettings @Inject constructor(
 	 * Deliberately not wrapped in hardware-backed Keystore: the secret has to be exportable, because
 	 * it rides in the app backup and can be shown as a recovery phrase so an identity survives a new
 	 * phone. Encrypting at rest what is also printed on screen would be theatre.
+	 *
+	 * Synchronized and committed: every request builds its header from this, so the first burst of
+	 * parallel calls would otherwise each see no key, each generate one, and register as different
+	 * accounts.
 	 */
+	@Synchronized
 	fun requireSecret(): String {
 		prefs.getString(KEY_SECRET, null)?.let { return it }
 		val generated = RecoveryKey.generate()
-		prefs.edit { putString(KEY_SECRET, generated) }
+		prefs.edit(commit = true) { putString(KEY_SECRET, generated) }
 		return generated
 	}
 
@@ -139,9 +144,10 @@ class CommunitySettings @Inject constructor(
 	 * @return false when the value is not a plausible key, so a typo cannot silently orphan the
 	 * user's existing comments. See [RecoveryKey] for why that check is tested so carefully.
 	 */
+	@Synchronized
 	fun adoptSecret(secret: String): Boolean {
 		if (!RecoveryKey.isPlausible(secret)) return false
-		prefs.edit {
+		prefs.edit(commit = true) {
 			putString(KEY_SECRET, RecoveryKey.normalize(secret))
 			remove(KEY_REGISTERED)
 			remove(KEY_SYNCED_NICKNAME)
@@ -155,8 +161,9 @@ class CommunitySettings @Inject constructor(
 	 * @param previous the value [peekSecret] returned before adopting, or null if there was none - in
 	 *  which case the key is dropped entirely and the next call generates a fresh one.
 	 */
+	@Synchronized
 	fun revertSecret(previous: String?) {
-		prefs.edit {
+		prefs.edit(commit = true) {
 			if (previous == null) remove(KEY_SECRET) else putString(KEY_SECRET, previous)
 			remove(KEY_REGISTERED)
 			remove(KEY_SYNCED_NICKNAME)

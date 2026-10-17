@@ -17,9 +17,11 @@ import org.koitharu.kotatsu.core.db.entity.MangaPrefsEntity
 import org.koitharu.kotatsu.core.db.entity.toEntities
 import org.koitharu.kotatsu.core.db.entity.toEntity
 import org.koitharu.kotatsu.core.db.entity.toManga
+import org.koitharu.kotatsu.core.db.entity.toMangaChapter
 import org.koitharu.kotatsu.core.db.entity.toMangaChapters
 import org.koitharu.kotatsu.core.db.entity.toMangaTags
 import org.koitharu.kotatsu.core.model.LocalMangaSource
+import org.koitharu.kotatsu.core.model.findSameChapter
 import org.koitharu.kotatsu.core.model.isLocal
 import org.koitharu.kotatsu.core.nav.MangaIntent
 import org.koitharu.kotatsu.core.os.AppShortcutManager
@@ -27,8 +29,10 @@ import org.koitharu.kotatsu.core.prefs.ReaderMode
 import org.koitharu.kotatsu.core.ui.model.MangaOverride
 import org.koitharu.kotatsu.core.util.ext.toFileOrNull
 import org.koitharu.kotatsu.parsers.model.Manga
+import org.koitharu.kotatsu.parsers.model.MangaChapter
 import org.koitharu.kotatsu.parsers.model.MangaSource
 import org.koitharu.kotatsu.parsers.model.MangaTag
+import org.koitharu.kotatsu.parsers.util.findById
 import org.koitharu.kotatsu.parsers.util.nullIfEmpty
 import org.koitharu.kotatsu.reader.domain.ReaderColorFilter
 import javax.inject.Inject
@@ -155,6 +159,7 @@ class MangaDataRepository @Inject constructor(
 				db.getMangaDao().upsert(manga.toEntity(), tags)
 				if (!manga.isLocal) {
 					manga.chapters?.let { chapters ->
+						keepHistoryChapter(manga.id, chapters)
 						db.getChaptersDao().replaceAll(manga.id, chapters.withIndex().toEntities(manga.id))
 					}
 				}
@@ -165,8 +170,35 @@ class MangaDataRepository @Inject constructor(
 	suspend fun updateChapters(manga: Manga) {
 		val chapters = manga.chapters
 		if (!chapters.isNullOrEmpty() && manga.id in db.getMangaDao()) {
-			db.getChaptersDao().replaceAll(manga.id, chapters.withIndex().toEntities(manga.id))
+			db.withTransaction {
+				keepHistoryChapter(manga.id, chapters)
+				db.getChaptersDao().replaceAll(manga.id, chapters.withIndex().toEntities(manga.id))
+			}
 		}
+	}
+
+	/**
+	 * The chapter as it was in the chapter list last stored for [mangaId], which may hold ids that a fresher load
+	 * of the source no longer has.
+	 */
+	suspend fun findCachedChapter(mangaId: Long, chapterId: Long): MangaChapter? {
+		return db.getChaptersDao().find(mangaId, chapterId)?.toMangaChapter()
+	}
+
+	/**
+	 * History only keeps a chapter id. When the source gives the history chapter a new id, the stored list is the
+	 * last place that still says which chapter it was, so move the history onto that chapter of [newChapters]
+	 * before the list is replaced. Otherwise the reading position is later guessed from a percentage, possibly
+	 * in another branch.
+	 */
+	private suspend fun keepHistoryChapter(mangaId: Long, newChapters: List<MangaChapter>) {
+		val history = db.getHistoryDao().find(mangaId) ?: return
+		if (newChapters.findById(history.chapterId) != null) {
+			return
+		}
+		val previous = findCachedChapter(mangaId, history.chapterId) ?: return
+		val same = newChapters.findSameChapter(previous) ?: return
+		db.getHistoryDao().update(history.copy(chapterId = same.id))
 	}
 
 	suspend fun gcChaptersCache() {

@@ -37,6 +37,7 @@ import org.koitharu.kotatsu.core.exceptions.resolve.CaptchaAutoResolveCoordinato
 import org.koitharu.kotatsu.core.exceptions.resolve.CaptchaHandler
 import org.koitharu.kotatsu.core.image.AvifImageDecoder
 import org.koitharu.kotatsu.core.image.CbzFetcher
+import org.koitharu.kotatsu.core.image.JxlImageDecoder
 import org.koitharu.kotatsu.core.image.MangaSourceHeaderInterceptor
 import org.koitharu.kotatsu.core.network.MangaHttpClient
 import org.koitharu.kotatsu.core.network.imageproxy.ImageProxyInterceptor
@@ -143,6 +144,7 @@ interface AppModule {
 					add(SvgDecoder.Factory())
 					add(CbzFetcher.Factory())
 					add(AvifImageDecoder.Factory())
+					add(JxlImageDecoder.Factory())
 					add(faviconFetcherFactory)
 					add(MangaPageKeyer())
 					add(pageFetcherFactory)
