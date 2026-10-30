@@ -23,6 +23,7 @@ import org.koitharu.kotatsu.core.util.ext.consume
 import org.koitharu.kotatsu.databinding.SheetCommunityCommentsBinding
 import org.koitharu.kotatsu.sourcescore.data.ApiErrorDto
 import org.koitharu.kotatsu.sourcescore.data.CommentDto
+import javax.inject.Inject
 
 /**
  * The comment thread for one work, or one chapter of it.
@@ -33,6 +34,9 @@ import org.koitharu.kotatsu.sourcescore.data.CommentDto
  */
 @AndroidEntryPoint
 class CommunityCommentsSheet : BaseAdaptiveSheet<SheetCommunityCommentsBinding>(), CommentActions {
+
+	@Inject
+	lateinit var nameGate: CommunityNameGate
 
 	private val viewModel by viewModels<CommunityCommentsViewModel>()
 	private var adapter: CommunityCommentAdapter? = null
@@ -49,6 +53,9 @@ class CommunityCommentsSheet : BaseAdaptiveSheet<SheetCommunityCommentsBinding>(
 		val chapterId = requireArguments().getLong(ARG_CHAPTER_ID, 0L).takeIf { it != 0L }
 
 		adapter = CommunityCommentAdapter(this).also { binding.recyclerView.adapter = it }
+		// Opened from a reply notification: bring that reply into view once it has loaded. Consumed on
+		// first use so a later reload or sort change does not keep yanking the list back to it.
+		var pendingFocusId = if (savedInstanceState == null) requireArguments().getString(ARG_FOCUS_COMMENT_ID) else null
 
 		// Open, at full height, on the first frame. disableFitToContents() alone only sets the
 		// height the sheet is allowed to reach; the behaviour still started collapsed, so the box was
@@ -79,6 +86,13 @@ class CommunityCommentsSheet : BaseAdaptiveSheet<SheetCommunityCommentsBinding>(
 
 		viewModel.comments.observe(viewLifecycleOwner) { comments ->
 			adapter?.submitList(comments)
+			pendingFocusId?.let { focusId ->
+				val index = comments.indexOfFirst { it.id == focusId }
+				if (index >= 0) {
+					pendingFocusId = null
+					binding.recyclerView.post { binding.recyclerView.scrollToPosition(index) }
+				}
+			}
 			binding.textViewEmpty.isVisible = comments.isEmpty() && viewModel.isLoading.value != true
 		}
 		viewModel.total.observe(viewLifecycleOwner) { updateSubtitle() }
@@ -149,6 +163,8 @@ class CommunityCommentsSheet : BaseAdaptiveSheet<SheetCommunityCommentsBinding>(
 		val body = binding.editTextComment.text?.toString()?.trim().orEmpty()
 		if (body.isEmpty()) return
 		lifecycleScope.launch {
+			// No name yet: the name step opens and the draft stays in the box for the next tap.
+			if (!nameGate.ensureNamed(parentFragmentManager)) return@launch
 			if (viewModel.send(body, binding.checkBoxSpoiler.isChecked)) {
 				binding.editTextComment.setText("")
 				// Cleared on success only: a rejected comment keeps everything the user chose, because
@@ -264,17 +280,22 @@ class CommunityCommentsSheet : BaseAdaptiveSheet<SheetCommunityCommentsBinding>(
 		private const val TAG = "CommunityCommentsSheet"
 		private const val ARG_WORK_ID = "work_id"
 		private const val ARG_CHAPTER_ID = "chapter_id"
+		private const val ARG_FOCUS_COMMENT_ID = "focus_comment_id"
 
 		/** Mirrors the server's own minimum, which removes "first", "up" and "lol" without judgement. */
 		/** Mirrors the server's CommentRules.MIN_BODY_LENGTH. The server is the one that enforces it. */
 		/** Only until the first page arrives; the server is the authority. */
 		private const val MIN_LENGTH = 10
 
-		fun show(fm: FragmentManager, workId: String, chapterId: Long? = null) {
+		/** @param focusCommentId scrolled into view once loaded, e.g. the reply a notification was about. */
+		fun show(fm: FragmentManager, workId: String, chapterId: Long? = null, focusCommentId: String? = null) {
+			// A second notification tap while the sheet is already open replaces it rather than stacking.
+			(fm.findFragmentByTag(TAG) as? CommunityCommentsSheet)?.dismissAllowingStateLoss()
 			CommunityCommentsSheet().apply {
-				arguments = Bundle(2).apply {
+				arguments = Bundle(3).apply {
 					putString(ARG_WORK_ID, workId)
 					chapterId?.let { putLong(ARG_CHAPTER_ID, it) }
+					focusCommentId?.let { putString(ARG_FOCUS_COMMENT_ID, it) }
 				}
 			}.show(fm, TAG)
 		}

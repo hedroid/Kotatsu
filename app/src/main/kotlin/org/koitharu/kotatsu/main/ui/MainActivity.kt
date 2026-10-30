@@ -84,6 +84,7 @@ import org.koitharu.kotatsu.search.ui.suggestion.adapter.SearchSuggestionAdapter
 import javax.inject.Inject
 import com.google.android.material.R as materialR
 import org.koitharu.kotatsu.sourcescore.data.CommunitySettings
+import org.koitharu.kotatsu.sourcescore.ui.CommunityCommentsSheet
 import org.koitharu.kotatsu.sourcescore.ui.CommunityOnboardingDialog
 import org.koitharu.kotatsu.sourcescore.domain.CommunityReplyNotifier
 import org.koitharu.kotatsu.sourcescore.ui.SourceScoreSyncWorker
@@ -162,9 +163,12 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), AppBarOwner, BottomNav
 		CommunityOnboardingDialog.showIfNeeded(this, communitySettings, supportFragmentManager)
 		// Idempotent, and reads the toggles - so it also cancels the job when the feature is off.
 		sourceScoreSyncScheduler.schedule()
-		// Polled on open rather than pushed: push would mean a device token and a third party
-		// learning when this user opens a manga app, to save a request that costs nothing.
-		communityReplyNotifier.pollOnOpen(lifecycleScope)
+		// Polled while the app is open rather than pushed: push would mean a device token and a third
+		// party learning when this user opens a manga app, to save a request that costs nothing.
+		communityReplyNotifier.watchWhileOpen(this)
+		if (savedInstanceState == null) {
+			openCommentsFromNotification(intent)
+		}
 
 		val exitCallback = ExitCallback(this, viewBinding.container)
 		onBackPressedDispatcher.addCallback(exitCallback)
@@ -197,6 +201,26 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), AppBarOwner, BottomNav
 		viewBinding.searchView.addTransitionListener(this)
 		viewBinding.searchView.addTransitionListener(exitCallback)
 		initSearch()
+	}
+
+	override fun onNewIntent(intent: Intent) {
+		super.onNewIntent(intent)
+		openCommentsFromNotification(intent)
+	}
+
+	/** A tapped reply notification: open that thread over whatever screen is showing. */
+	private fun openCommentsFromNotification(intent: Intent?) {
+		if (intent?.action != CommunityReplyNotifier.ACTION_OPEN_COMMENTS) return
+		val workId = intent.getStringExtra(CommunityReplyNotifier.EXTRA_WORK_ID) ?: return
+		val chapterId = intent.getLongExtra(CommunityReplyNotifier.EXTRA_CHAPTER_ID, 0L).takeIf { it != 0L }
+		CommunityCommentsSheet.show(
+			fm = supportFragmentManager,
+			workId = workId,
+			chapterId = chapterId,
+			focusCommentId = intent.getStringExtra(CommunityReplyNotifier.EXTRA_COMMENT_ID),
+		)
+		// Consumed: a configuration change re-delivers the same intent, which must not reopen the sheet.
+		intent.action = null
 	}
 
 	override fun onRestoreInstanceState(savedInstanceState: Bundle) {

@@ -30,6 +30,7 @@ import org.koitharu.kotatsu.parsers.util.runCatchingCancellable
 import org.koitharu.kotatsu.sourcescore.data.CommunityApi
 import org.koitharu.kotatsu.sourcescore.data.CommunityDatabase
 import org.koitharu.kotatsu.sourcescore.data.CommunitySettings
+import org.koitharu.kotatsu.sourcescore.data.nicknameRejection
 import javax.inject.Inject
 
 /**
@@ -79,17 +80,24 @@ class CommunitySettingsFragment : BasePreferenceFragment(R.string.community) {
 
 		findPreference<EditTextPreference>("nickname")?.let { preference ->
 			preference.text = communitySettings.nickname
-			preference.summary = communitySettings.nickname ?: getString(R.string.community_nickname_summary)
+			preference.summary = nicknameSummary()
+			// A name chosen while the server was unreachable is still only on this device. Retrying
+			// here means opening this screen is enough to finish it, without the user retyping it.
+			if (api.isNicknamePending) {
+				viewLifecycleScope.launch {
+					runCatchingCancellable { api.pushPendingNickname() }
+					preference.text = communitySettings.nickname
+					preference.summary = nicknameSummary()
+				}
+			}
 			preference.setOnPreferenceChangeListener { _, value ->
 				// Returning false leaves the stored value alone. Clearing the field would put the
 				// account back to anon#xxxx, which onboarding no longer allows anyone to choose.
 				val candidate = (value as? String)?.trim().orEmpty()
-				if (candidate.isEmpty()) {
-					false
-				} else {
-					applyNickname(candidate)
-					true
-				}
+				if (candidate.isNotEmpty()) applyNickname(candidate)
+				// Always false: the preference would otherwise store the typed value itself, and a name
+				// the server then rejects would be shown here while comments still say anon#xxxx.
+				false
 			}
 		}
 
@@ -170,20 +178,39 @@ class CommunitySettingsFragment : BasePreferenceFragment(R.string.community) {
 		}
 	}
 
-	private fun applyNickname(value: String?) {
-		val nickname = value?.trim().orEmpty()
-		communitySettings.nickname = nickname.takeIf { it.isNotEmpty() }
-		findPreference<Preference>("nickname")?.summary =
-			communitySettings.nickname ?: getString(R.string.community_nickname_summary)
-		if (nickname.isEmpty()) return
+	/**
+	 * Stored locally only once the server has accepted it, or while the server cannot be reached - then
+	 * it stays pending and is sent with the next community call. A rejection is explained and the
+	 * previous name kept, so this screen never shows a name comments do not.
+	 */
+	/** The name, marked when this device is the only place it exists yet. */
+	private fun nicknameSummary(): String {
+		val nickname = communitySettings.nickname ?: return getString(R.string.community_nickname_summary)
+		return if (api.isNicknamePending) getString(R.string.community_nickname_pending_summary, nickname) else nickname
+	}
+
+	private fun applyNickname(nickname: String) {
 		viewLifecycleScope.launch {
-			runCatchingCancellable {
+			val result = runCatchingCancellable {
 				withContext(Dispatchers.Default) { api.setNickname(nickname) }
-			}.onFailure {
-				// Left unsynced on purpose: the daily sync retries it.
-				it.printStackTraceDebug()
-			}.onSuccess {
-				communitySettings.syncedNickname = nickname
+			}
+			val rejection = result.exceptionOrNull()?.let(::nicknameRejection)
+			if (rejection != null) {
+				view?.let { Snackbar.make(it, nicknameRejectionMessage(requireContext(), rejection), Snackbar.LENGTH_LONG).show() }
+			} else {
+				result.exceptionOrNull()?.printStackTraceDebug()
+				communitySettings.nickname = nickname
+				if (result.isSuccess) {
+					communitySettings.syncedNickname = nickname
+				} else {
+					// Kept, but the server has not got it: comments still say anon#xxxx until it does,
+					// and saying nothing here is what let a name sit pending without anyone knowing.
+					view?.let { Snackbar.make(it, R.string.community_nickname_pending, Snackbar.LENGTH_LONG).show() }
+				}
+			}
+			findPreference<EditTextPreference>("nickname")?.let { preference ->
+				preference.text = communitySettings.nickname
+				preference.summary = nicknameSummary()
 			}
 		}
 	}

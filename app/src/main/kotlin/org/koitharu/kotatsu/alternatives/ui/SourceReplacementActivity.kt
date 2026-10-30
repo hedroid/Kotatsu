@@ -3,6 +3,7 @@ package org.koitharu.kotatsu.alternatives.ui
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
+import android.view.SubMenu
 import android.view.View
 import android.widget.Toast
 import androidx.activity.viewModels
@@ -13,7 +14,6 @@ import androidx.core.view.updatePadding
 import coil3.ImageLoader
 import dagger.hilt.android.AndroidEntryPoint
 import org.koitharu.kotatsu.R
-import org.koitharu.kotatsu.alternatives.domain.AlternativeSourceScope
 import org.koitharu.kotatsu.core.exceptions.resolve.SnackbarErrorObserver
 import org.koitharu.kotatsu.core.model.getTitle
 import org.koitharu.kotatsu.core.nav.router
@@ -47,8 +47,7 @@ class SourceReplacementActivity : BaseActivity<ActivityAlternativesBinding>(),
 	private val viewModel by viewModels<SourceReplacementViewModel>()
 	private var sourceMenuItem: MenuItem? = null
 	private var sourceScopeMenuItem: MenuItem? = null
-	private var presetScopeMenuItem: MenuItem? = null
-	private var enabledScopeMenuItem: MenuItem? = null
+	private var sourceScopeSubMenu: SubMenu? = null
 	private var searchMenuItem: MenuItem? = null
 	private var nextSourceMenuItem: MenuItem? = null
 	private var skipMenuItem: MenuItem? = null
@@ -128,7 +127,7 @@ class SourceReplacementActivity : BaseActivity<ActivityAlternativesBinding>(),
 		viewModel.sourceScope.observe(this) {
 			updateSourceScopeMenu()
 		}
-		viewModel.activePresetTitle.observe(this) {
+		viewModel.scopeOptions.observe(this) {
 			updateSourceScopeMenu()
 		}
 		viewModel.onMigrated.observeEvent(this) { result ->
@@ -206,19 +205,7 @@ class SourceReplacementActivity : BaseActivity<ActivityAlternativesBinding>(),
 		sourceScopeMenuItem = scopeMenu.item.apply {
 			setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
 		}
-		presetScopeMenuItem = scopeMenu.add(
-			SOURCE_SCOPE_GROUP,
-			ACTION_SCOPE_PRESET,
-			Menu.NONE,
-			R.string.source_presets,
-		)
-		enabledScopeMenuItem = scopeMenu.add(
-			SOURCE_SCOPE_GROUP,
-			ACTION_SCOPE_ENABLED,
-			Menu.NONE,
-			R.string.enabled_sources,
-		)
-		scopeMenu.setGroupCheckable(SOURCE_SCOPE_GROUP, true, true)
+		sourceScopeSubMenu = scopeMenu
 		updateSourceScopeMenu()
 		updateHeader()
 		return true
@@ -245,17 +232,15 @@ class SourceReplacementActivity : BaseActivity<ActivityAlternativesBinding>(),
 			true
 		}
 
-		ACTION_SCOPE_PRESET -> {
-			viewModel.selectSourceScope(AlternativeSourceScope.CURRENT_PRESET)
-			true
+		else -> {
+			val scope = SourceScopeMenu.scopeFor(item.itemId, viewModel.scopeOptions.value)
+			if (scope != null) {
+				viewModel.selectSourceScope(scope)
+				true
+			} else {
+				super.onOptionsItemSelected(item)
+			}
 		}
-
-		ACTION_SCOPE_ENABLED -> {
-			viewModel.selectSourceScope(AlternativeSourceScope.ENABLED)
-			true
-		}
-
-		else -> super.onOptionsItemSelected(item)
 	}
 
 	override fun onApplyWindowInsets(
@@ -384,17 +369,12 @@ class SourceReplacementActivity : BaseActivity<ActivityAlternativesBinding>(),
 	}
 
 	private fun updateSourceScopeMenu() {
-		val presetTitle = viewModel.activePresetTitle.value
-		presetScopeMenuItem?.apply {
-			isVisible = presetTitle != null
-			title = presetTitle ?: getString(R.string.source_presets)
-			isChecked = viewModel.sourceScope.value == AlternativeSourceScope.CURRENT_PRESET
+		val scopeOptions = viewModel.scopeOptions.value
+		sourceScopeSubMenu?.let { subMenu ->
+			subMenu.clear()
+			SourceScopeMenu.populate(subMenu, SOURCE_SCOPE_GROUP, scopeOptions, viewModel.sourceScope.value)
 		}
-		enabledScopeMenuItem?.isChecked = viewModel.sourceScope.value == AlternativeSourceScope.ENABLED
-		val selectedTitle = when (viewModel.sourceScope.value) {
-			AlternativeSourceScope.CURRENT_PRESET -> presetTitle ?: getString(R.string.source_presets)
-			AlternativeSourceScope.ENABLED -> getString(R.string.enabled_sources)
-		}
+		val selectedTitle = SourceScopeMenu.title(this, viewModel.sourceScope.value, scopeOptions)
 		sourceScopeMenuItem?.title = getString(R.string.preset_sources) + ": " + selectedTitle
 	}
 
@@ -502,8 +482,6 @@ class SourceReplacementActivity : BaseActivity<ActivityAlternativesBinding>(),
 
 	private companion object {
 		const val ACTION_SOURCE_SCOPE = Menu.FIRST + 1000
-		const val ACTION_SCOPE_PRESET = Menu.FIRST + 1001
-		const val ACTION_SCOPE_ENABLED = Menu.FIRST + 1002
 		const val SOURCE_SCOPE_GROUP = Menu.FIRST + 1003
 		const val ACTION_NEXT_SOURCE = Menu.FIRST + 1004
 		const val ACTION_SKIP = Menu.FIRST + 1005

@@ -62,9 +62,15 @@ android {
 		applicationId 'com.github.kotatsu'
 		minSdk = 23
 		targetSdk = 37
-		versionCode = 2043
-        versionName = '9.8.4'
+		versionCode = 2047
+        versionName = '9.8.5'
 		generatedDensities = []
+		ndk {
+			// ARM only. x86 and x86_64 devices - Intel Chromebooks, emulators, BlueStacks - run these
+			// through Android's ARM translation, so the x86 copies of every native library were
+			// megabytes of download nobody needed. A device without that translation cannot install.
+			abiFilters 'armeabi-v7a', 'arm64-v8a'
+		}
 		testInstrumentationRunner 'org.koitharu.kotatsu.HiltTestRunner'
 		ksp {
 			arg('room.generateKotlin', 'true')
@@ -286,6 +292,7 @@ dependencies {
 	implementation libs.coil.gif
 	implementation libs.coil.svg
 	implementation libs.avif.decoder
+	implementation libs.jxl.coder
 	implementation libs.ssiv
 	implementation libs.disk.lru.cache
 	implementation libs.markwon

@@ -159,7 +159,10 @@ class CommunityCommentsViewModel @Inject constructor(
 	 */
 	fun vote(comment: CommentDto, value: Int) {
 		viewModelScope.launch {
-			val next = if (comment.myVote == value) 0 else value
+			// The bound row can lag the list after a quick second tap; toggle against the latest copy.
+			val current = comments.value?.firstOrNull { it.id == comment.id }?.myVote ?: comment.myVote
+			// Withdrawing sends 0; the server restores whatever vote this one replaced.
+			val next = if (current == value) 0 else value
 			runCatchingCancellable { api.voteComment(comment.id, next) }
 				.onSuccess { updated -> replace(updated) }
 		}

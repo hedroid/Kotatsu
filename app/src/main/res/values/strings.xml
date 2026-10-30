@@ -216,6 +216,7 @@
     <string name="pinned_sources_only">Pinned sources only</string>
     <string name="hide_empty_sources">Hide empty sources</string>
     <string name="enabled_sources">Enabled sources</string>
+    <string name="disabled_sources">Disabled sources</string>
     <string name="same_language_as_current">Same language as current</string>
     <string name="same_content_type_as_current">Same content type as current</string>
     <string name="hide_results_without_chapters">Hide results without chapters</string>
@@ -537,6 +538,8 @@
     <string name="community_server_unreachable">Not reachable — comments and ratings will not appear</string>
     <string name="community_nickname">Nickname</string>
     <string name="community_nickname_summary">How you appear on comments</string>
+    <string name="community_nickname_pending">Saved on this device. Comments show anon until the server has it</string>
+    <string name="community_nickname_pending_summary">%1$s — not synced yet</string>
     <string name="community_recovery">Back up my identity</string>
     <string name="community_recovery_summary">Save your key, or restore one from another phone</string>
     <string name="community_recovery_none">Your identity is created the first time you use a community feature.</string>
@@ -584,6 +587,9 @@ Optional — skip it and you appear as anon.</string>
     <string name="community_nickname_required">Pick a nickname to carry on</string>
     <string name="community_nickname_too_short">A little longer, please</string>
     <string name="community_nickname_invalid">Letters, numbers and spaces only</string>
+    <string name="community_nickname_reserved">That name is reserved. Pick another one</string>
+    <string name="community_nickname_too_long">24 characters at most</string>
+    <string name="community_nickname_blocked">&#8220;%s&#8221; isn\'t allowed in a nickname</string>
     <string name="community_sponsor_title">Where the money goes</string>
     <string name="community_sponsor_body">Kotatsu-Redo is free and has no ads. Sponsorship covers the server, and everything beyond that is split evenly:</string>
     <string name="community_sponsor_split_translation">Translation work</string>

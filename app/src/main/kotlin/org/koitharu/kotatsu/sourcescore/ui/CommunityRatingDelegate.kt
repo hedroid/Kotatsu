@@ -100,7 +100,8 @@ class CommunityRatingDelegate @Inject constructor(
 class StarRowBinder(
 	private val stars: List<MaterialButton>,
 	private val scope: CoroutineScope,
-	private val onRate: suspend (Float) -> Unit,
+	/** Returns false when the rating did not go ahead, and the stars go back to what they showed. */
+	private val onRate: suspend (Float) -> Boolean,
 ) {
 
 	private var current = 0
@@ -108,9 +109,12 @@ class StarRowBinder(
 	init {
 		stars.forEachIndexed { index, button ->
 			button.setOnClickListener {
+				val previous = current
 				val value = if (current == index + 1) 0 else index + 1
 				render(value)
-				scope.launch { onRate(value.toFloat()) }
+				scope.launch {
+					if (!onRate(value.toFloat())) render(previous)
+				}
 			}
 		}
 	}

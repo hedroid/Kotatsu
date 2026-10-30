@@ -29,7 +29,6 @@ import org.koitharu.kotatsu.core.prefs.TriStateOption
 import org.koitharu.kotatsu.core.ui.util.ReversibleAction
 import org.koitharu.kotatsu.core.util.ext.call
 import org.koitharu.kotatsu.core.util.ext.computeSize
-import org.koitharu.kotatsu.core.util.ext.onEachWhile
 import org.koitharu.kotatsu.details.data.MangaDetails
 import org.koitharu.kotatsu.details.domain.BranchComparator
 import org.koitharu.kotatsu.details.domain.DetailsInteractor
@@ -238,21 +237,33 @@ class DetailsViewModel @Inject constructor(
 	}
 
 	private fun doLoad(force: Boolean) = launchLoadingJob(Dispatchers.Default) {
+		var defaultBranch: DefaultBranch? = null
 		detailsLoadUseCase.invoke(intent, force)
-			.onEachWhile {
-				if (it.allChapters.isNotEmpty()) {
+			.onEach {
+				if (it.allChapters.isEmpty()) {
+					return@onEach
+				}
+				// The first list is usually the stored one, then comes the one just loaded from the source. Pick the
+				// default branch again when the one picked from the stored list is not in the new one (the source
+				// renamed its branches), or when it was not picked from the history and the user has kept it.
+				val picked = defaultBranch
+				val current = selectedBranch.value
+				if (picked == null || current !in it.chapters || (current == picked.name && !picked.isFromHistory)) {
 					val manga = it.toManga()
-					// find default branch
 					val hist = historyRepository.getOne(manga)
-					selectedBranch.value = manga.getPreferredBranch(hist)
-					true
-				} else {
-					false
+					val branch = manga.getPreferredBranch(hist)
+					selectedBranch.value = branch
+					defaultBranch = DefaultBranch(
+						name = branch,
+						isFromHistory = hist != null && manga.findChapterById(hist.chapterId) != null,
+					)
 				}
 			}.collect {
 				mangaDetails.value = it
 			}
 	}
+
+	private class DefaultBranch(val name: String?, val isFromHistory: Boolean)
 
 	private fun getScrobbler(index: Int): Scrobbler? {
 		val info = scrobblingInfo.value.getOrNull(index)

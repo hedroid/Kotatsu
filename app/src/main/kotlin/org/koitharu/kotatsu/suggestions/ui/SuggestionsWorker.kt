@@ -47,6 +47,7 @@ import kotlinx.coroutines.sync.withPermit
 import org.koitharu.kotatsu.R
 import org.koitharu.kotatsu.core.exceptions.CloudFlareException
 import org.koitharu.kotatsu.core.exceptions.resolve.CaptchaHandler
+import org.koitharu.kotatsu.core.model.MangaHistory
 import org.koitharu.kotatsu.core.model.distinctById
 import org.koitharu.kotatsu.core.model.getLocale
 import org.koitharu.kotatsu.core.model.isNsfw
@@ -64,7 +65,6 @@ import org.koitharu.kotatsu.core.util.ext.getQuantityStringSafe
 import org.koitharu.kotatsu.core.util.ext.mangaSourceExtra
 import org.koitharu.kotatsu.core.util.ext.printStackTraceDebug
 import org.koitharu.kotatsu.core.util.ext.sanitize
-import org.koitharu.kotatsu.core.util.ext.takeMostFrequent
 import org.koitharu.kotatsu.core.util.ext.toBitmapOrNull
 import org.koitharu.kotatsu.core.util.ext.trySetForeground
 import org.koitharu.kotatsu.explore.data.MangaSourcesRepository
@@ -79,9 +79,13 @@ import org.koitharu.kotatsu.parsers.util.almostEquals
 import org.koitharu.kotatsu.parsers.util.runCatchingCancellable
 import org.koitharu.kotatsu.parsers.util.sizeOrZero
 import org.koitharu.kotatsu.settings.work.PeriodicWorkScheduler
+import org.koitharu.kotatsu.suggestions.domain.CommunitySuggestionsSource
 import org.koitharu.kotatsu.suggestions.domain.MangaSuggestion
+import org.koitharu.kotatsu.suggestions.domain.SuggestionRanking
 import org.koitharu.kotatsu.suggestions.domain.SuggestionRepository
+import org.koitharu.kotatsu.suggestions.domain.TagStatistics
 import org.koitharu.kotatsu.suggestions.domain.TagsBlacklist
+import java.time.Instant
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import kotlin.math.pow
@@ -101,6 +105,8 @@ class SuggestionsWorker @AssistedInject constructor(
 	private val workManager: WorkManager,
 	private val mangaRepositoryFactory: MangaRepository.Factory,
 	private val sourcesRepository: MangaSourcesRepository,
+	private val communitySuggestions: CommunitySuggestionsSource,
+	private val tagStatistics: TagStatistics,
 ) : CoroutineWorker(appContext, params) {
 
 	private val notificationManager by lazy { NotificationManagerCompat.from(appContext) }
@@ -178,16 +184,58 @@ class SuggestionsWorker @AssistedInject constructor(
 	}
 
 	private suspend fun doWorkImpl(): Int {
-		val seed = (
-			historyRepository.getList(0, 20) +
-				favouritesRepository.getLastManga(20)
-			).distinctById()
+		val history = historyRepository.getList(0, 20)
+		val favourites = favouritesRepository.getLastManga(20)
+		val favouriteIds = favourites.mapTo(HashSet()) { it.id }
+		// Opened, barely read and left for weeks: what the reader turned away from, not a taste to
+		// echo. A favourite is never that, however little of it has been read.
+		val dropped = history.filter { manga ->
+			manga.id !in favouriteIds && historyRepository.getOne(manga)?.isDropped() == true
+		}
+		val droppedIds = dropped.mapTo(HashSet()) { it.id }
+		val seed = (history + favourites).distinctById().filterNot { it.id in droppedIds }
 		val sources = getSources()
 		if (seed.isEmpty() || sources.isEmpty()) {
 			return 0
 		}
 		val tagsBlacklist = TagsBlacklist(appSettings.suggestionsTagsBlacklist, TAG_EQ_THRESHOLD)
-		val tags = seed.flatMap { it.tags.map { x -> x.title } }.takeMostFrequent(10)
+		val excludeNsfw = appSettings.isSuggestionsExcludeNsfw || appSettings.isNsfwContentDisabled
+
+		// The server knows which works are the same work across sources, which sources still carry
+		// them, and genres many readers agree on - none of which a per-source tag search can see.
+		// It is asked first, and everything below remains exactly as it was for when it cannot
+		// answer: community features off, no network, a library nobody else has opened.
+		val remote = runCatchingCancellable {
+			communitySuggestions.getSuggestions(seed, dropped, MAX_RESULTS, tagsBlacklist, excludeNsfw)
+		}.onFailure { it.printStackTraceDebug() }.getOrDefault(emptyList())
+
+		val suggestions = if (remote.size >= MIN_REMOTE_RESULTS) {
+			remote
+		} else {
+			localSuggestions(seed, sources, tagsBlacklist)
+		}
+		return publish(suggestions, tagsBlacklist)
+	}
+
+	/**
+	 * The original: ask every enabled source for the tags the reader's own library is made of, then
+	 * rank what comes back by how much of that it echoes.
+	 */
+	private suspend fun localSuggestions(
+		seed: List<Manga>,
+		sources: List<MangaSource>,
+		tagsBlacklist: TagsBlacklist,
+	): List<MangaSuggestion> {
+		// The reader's most telling tags rather than their most frequent: frequency alone always
+		// crowns `action`, and a source searched for `action` answers with its best-sellers.
+		val statistics = runCatchingCancellable { tagStatistics.snapshot() }
+			.onFailure { it.printStackTraceDebug() }
+			.getOrNull()
+		val tags = SuggestionRanking.distinctiveTags(
+			seedTags = seed.flatMap { it.tags.map { x -> x.title } },
+			rarity = { title -> statistics?.rarity(title) ?: 1.0 },
+			limit = 10,
+		)
 
 		val semaphore = Semaphore(MAX_PARALLELISM)
 		val producer = channelFlow {
@@ -202,7 +250,7 @@ class SuggestionsWorker @AssistedInject constructor(
 				}
 			}
 		}
-		val suggestions = producer
+		return producer
 			.flatten()
 			.take(MAX_RAW_RESULTS)
 			.map { manga ->
@@ -211,15 +259,24 @@ class SuggestionsWorker @AssistedInject constructor(
 					relevance = computeRelevance(manga.tags, tags),
 				)
 			}.toList()
-			.sortedBy { it.relevance }
+			// Best first: higher is a closer tag match, and only the first MAX_RESULTS are kept
+			.sortedByDescending { it.relevance }
 			.take(MAX_RESULTS)
+	}
+
+	/** Stores the list and, if the reader asked for it, picks one of the best to notify about. */
+	private suspend fun publish(suggestions: List<MangaSuggestion>, tagsBlacklist: TagsBlacklist): Int {
+		if (suggestions.isEmpty()) {
+			return 0
+		}
 		suggestionRepository.replace(suggestions)
 		if (appSettings.isSuggestionsNotificationAvailable
 			&& applicationContext.checkNotificationPermission(MANGA_CHANNEL_ID)
 		) {
 			for (i in 0..3) {
 				try {
-					val manga = suggestions[Random.nextInt(0, suggestions.size / 3)]
+					// The best third, and never an empty range: a short remote list is still a list.
+					val manga = suggestions[Random.nextInt(0, (suggestions.size / 3).coerceAtLeast(1))]
 					val details = mangaRepositoryFactory.create(manga.manga.source)
 						.getDetails(manga.manga)
 					if (details.chapters.isNullOrEmpty()) {
@@ -267,14 +324,26 @@ class SuggestionsWorker @AssistedInject constructor(
 		val availableOrders = repository.sortOrders
 		val order = preferredSortOrders.first { it in availableOrders }
 		val availableTags = repository.getFilterOptions().availableTags
-		val tag = tags.firstNotNullOfOrNull { title ->
+		val matched = tags.mapNotNull { title ->
 			availableTags.find { x -> x !in blacklist && x.title.almostEquals(title, TAG_EQ_THRESHOLD) }
-		}
-		val list = repository.getList(
+		}.distinct()
+		// A source carrying none of the reader's tags used to be searched with no tag at all, which
+		// is its whole catalogue, newest or most popular first - nothing to do with the reader.
+		val first = matched.firstOrNull() ?: return@runCatchingCancellable emptyList()
+		// Two telling tags together find what is actually alike; one alone casts a wide net
+		val narrow = if (repository.filterCapabilities.isMultipleTagsSupported) matched.take(2).toSet() else setOf(first)
+		var list = repository.getList(
 			offset = 0,
 			order = order,
-			filter = MangaListFilter(tags = setOfNotNull(tag)),
+			filter = MangaListFilter(tags = narrow),
 		).asArrayList()
+		if (list.isEmpty() && narrow.size > 1) {
+			list = repository.getList(
+				offset = 0,
+				order = order,
+				filter = MangaListFilter(tags = setOf(first)),
+			).asArrayList()
+		}
 		if (appSettings.isSuggestionsExcludeNsfw) {
 			list.removeAll { it.isNsfw() }
 		}
@@ -387,6 +456,8 @@ class SuggestionsWorker @AssistedInject constructor(
 	}
 
 	@FloatRange(from = 0.0, to = 1.0)
+	private fun MangaHistory.isDropped(): Boolean = SuggestionRanking.isDropped(percent, updatedAt, Instant.now())
+
 	private fun computeRelevance(mangaTags: Set<MangaTag>, allTags: List<String>): Float {
 		val maxWeight = (allTags.size + allTags.size + 1 - mangaTags.size) * mangaTags.size / 2.0
 		val weight = mangaTags.sumOf { tag ->
@@ -465,6 +536,12 @@ class SuggestionsWorker @AssistedInject constructor(
 		const val GROUP_SUGGESTION = "org.koitharu.kotatsu.SUGGESTIONS"
 		const val WORKER_NOTIFICATION_ID = 36
 		const val MAX_RESULTS = 160
+
+		/**
+		 * Below this the server has told us too little to be worth showing on its own - a library of
+		 * works nobody else has opened yet - so the local sweep runs instead.
+		 */
+		const val MIN_REMOTE_RESULTS = 12
 		const val MAX_PARALLELISM = 3
 		const val MAX_SOURCE_RESULTS = 20
 		const val MAX_RAW_RESULTS = 280
@@ -472,11 +549,12 @@ class SuggestionsWorker @AssistedInject constructor(
 		const val RATING_MIN = 0.5f
 		const val SETTINGS_ACTION_CODE = 4
 
+		// Popularity last: it hands back the same best-sellers whatever the reader likes
 		val preferredSortOrders = listOf(
 			SortOrder.UPDATED,
 			SortOrder.NEWEST,
-			SortOrder.POPULARITY,
 			SortOrder.RATING,
+			SortOrder.POPULARITY,
 		)
 	}
 }

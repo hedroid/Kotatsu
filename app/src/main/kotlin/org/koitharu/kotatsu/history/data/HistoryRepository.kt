@@ -11,6 +11,7 @@ import org.koitharu.kotatsu.core.db.entity.toManga
 import org.koitharu.kotatsu.core.db.entity.toMangaList
 import org.koitharu.kotatsu.core.db.entity.toMangaTags
 import org.koitharu.kotatsu.core.db.entity.toMangaTagsList
+import org.koitharu.kotatsu.core.model.findSameChapter
 import org.koitharu.kotatsu.core.model.getPreferredBranch
 import org.koitharu.kotatsu.core.model.MangaHistory
 import org.koitharu.kotatsu.core.model.isLocal
@@ -127,17 +128,21 @@ class HistoryRepository @Inject constructor(
 			HistoryWriteLog.skipped(manga)
 			return
 		}
-		HistoryWriteLog.write(manga, chapterId, page, percent, force, db.getHistoryDao().find(manga.id) == null)
 		assert(manga.chapters != null)
+		// A reader opened on an older load can still be on an id that the source has replaced since
+		val currentChapterId = manga.chapters?.takeIf { it.findById(chapterId) == null }
+			?.let { chapters -> mangaRepository.findCachedChapter(manga.id, chapterId)?.let(chapters::findSameChapter) }
+			?.id ?: chapterId
+		HistoryWriteLog.write(manga, currentChapterId, page, percent, force, db.getHistoryDao().find(manga.id) == null)
 		db.withTransaction {
 			mangaRepository.storeManga(manga, replaceExisting = true)
-			val branch = manga.chapters?.findById(chapterId)?.branch
+			val branch = manga.chapters?.findById(currentChapterId)?.branch
 			db.getHistoryDao().upsert(
 				HistoryEntity(
 					mangaId = manga.id,
 					createdAt = System.currentTimeMillis(),
 					updatedAt = System.currentTimeMillis(),
-					chapterId = chapterId,
+					chapterId = currentChapterId,
 					page = page,
 					scroll = scroll.toFloat(), // we migrate to int, but decide to not update database
 					percent = percent,
@@ -145,8 +150,8 @@ class HistoryRepository @Inject constructor(
 					deletedAt = 0L,
 				),
 			)
-			newChaptersUseCaseProvider.get()(manga, chapterId)
-			scrobblers.forEach { it.tryScrobble(manga, chapterId) }
+			newChaptersUseCaseProvider.get()(manga, currentChapterId)
+			scrobblers.forEach { it.tryScrobble(manga, currentChapterId) }
 		}
 	}
 
@@ -247,8 +252,25 @@ class HistoryRepository @Inject constructor(
 	}
 
 	private suspend fun HistoryEntity.recoverIfNeeded(manga: Manga): HistoryEntity {
-		val chapters = manga.findRecoveryChapters(this)
-		if (manga.isLocal || chapters.isNullOrEmpty() || chapters.findById(chapterId) != null) {
+		val allChapters = manga.chapters
+		// The history chapter can be in any branch: only a chapter gone from the whole list needs recovering.
+		// Looking for it in the recovery branch alone rewrote the history of every reader of another branch
+		// (for sources with branches of equal size, every branch but the first one) to that branch.
+		if (manga.isLocal || allChapters.isNullOrEmpty() || allChapters.findById(chapterId) != null) {
+			return this
+		}
+		// The source gave the chapter a new id: the stored list still says which chapter it was
+		val previous = mangaRepository.findCachedChapter(manga.id, chapterId)
+		val same = previous?.let(allChapters::findSameChapter)
+		if (same != null) {
+			val newEntity = copy(chapterId = same.id)
+			db.getHistoryDao().update(newEntity)
+			return newEntity
+		}
+		// Otherwise guess the position from the percentage, in the branch the chapter was read in if it still exists
+		val chapters = previous?.let { manga.getChapters(it.branch) }?.takeUnless { it.isEmpty() }
+			?: manga.findRecoveryChapters(this)
+		if (chapters.isNullOrEmpty()) {
 			return this
 		}
 		val newChapterIndex = estimateRecoveredChapterIndex(chapters.size) ?: return this

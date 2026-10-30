@@ -97,6 +97,21 @@ class MangaLinkResolver @Inject constructor(
 			?: seed
 	}
 
+	/**
+	 * The manga at [url] on [source], from its own details page.
+	 *
+	 * For callers that already know the exact address - a suggestion the server matched by it - where
+	 * a title search is both a wasted request and a guess: it misses on sources whose search cannot
+	 * find their own titles, and can return a different manga with the same name. The details are
+	 * cached, so opening the result costs nothing more.
+	 */
+	suspend fun resolveExact(source: MangaSource, url: String, title: String?): Manga {
+		val manga = repositoryFactory.create(source).getDetails(getSeedManga(source, url, title))
+		// As for links: a parser that derives ids from something other than the url would give the
+		// seed a different id than the entry the app already has, splitting its history.
+		return manga.publicUrl.takeIf { it.isNotEmpty() }?.let { dataRepository.findMangaByPublicUrl(it) } ?: manga
+	}
+
 	private suspend fun MangaRepository.getDetailsNoCache(manga: Manga): Manga = if (this is CachingMangaRepository) {
 		getDetails(manga, CachePolicy.READ_ONLY)
 	} else {
