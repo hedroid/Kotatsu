@@ -790,6 +790,7 @@
     <string name="chapter_number">第 %s 章</string>
     <string name="unnamed_chapter">未命名章节</string>
     <string name="search_disabled_sources">在已禁用的图源中搜索</string>
+    <string name="disabled_sources">已禁用的图源</string>
     <string name="error_details">错误详细信息</string>
     <string name="error_disclaimer_manga">尝试在网络浏览器中打开漫画，以确保此漫画在图源中可用</string>
     <string name="error_disclaimer_report">可向开发者提交错误报告，将会帮助我们定位并修复错误</string>
@@ -951,6 +952,8 @@
     <string name="community_server_unreachable">无法访问——评论和评分将不会显示</string>
     <string name="community_nickname">昵称</string>
     <string name="community_nickname_summary">你在评论中显示的名字</string>
+    <string name="community_nickname_pending">已保存在本机。服务器确认前，你的评论将以匿名显示</string>
+    <string name="community_nickname_pending_summary">%1$s——尚未同步</string>
     <string name="community_recovery">备份我的身份</string>
     <string name="community_recovery_summary">保存你的密钥，或从其他手机恢复</string>
     <string name="community_recovery_none">首次使用社区功能时才会创建你的身份。</string>
@@ -996,6 +999,9 @@
     <string name="community_nickname_required">请填写昵称后再继续</string>
     <string name="community_nickname_too_short">再长一点</string>
     <string name="community_nickname_invalid">只能包含字母、数字和空格</string>
+    <string name="community_nickname_reserved">该名称已被保留，请换一个</string>
+    <string name="community_nickname_too_long">最多 24 个字符</string>
+    <string name="community_nickname_blocked">&#8220;%s&#8221; 不能用在昵称中</string>
     <string name="community_sponsor_title">赞助款的去向</string>
     <string name="community_sponsor_body">Kotatsu-Redo 免费且没有广告。赞助首先用于支付服务器费用，其余部分平均分配：</string>
     <string name="community_sponsor_split_translation">翻译工作</string>
